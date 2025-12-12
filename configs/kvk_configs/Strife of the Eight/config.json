@@ -1,10 +1,10 @@
 {
   "periods": {
-    "zone_4": "Битва за Зону 4",
-    "passes": "Битва за Проходы",
-    "altars": "Битва за Алтари",
-    "kingsland": "Битва за Королевскую Зону",
-    "full_kvk": "Общее KVK"
+    "zone_4": "Battle for Zone 4",
+    "passes": "Battle for Passes",
+    "altars": "Battle for Altars",
+    "kingsland": "Battle for Kingsland",
+    "full_kvk": "Total KvK"
   },
   "default_period_file_suffix": "_stats.xlsx",
   "full_kvk_file": "full_kvk_stats.xlsx"

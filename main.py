@@ -1,13 +1,14 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import os
 import logging
 from dotenv import load_dotenv
 
-# Загрузка переменных окружения из .env файла
+# Load environment variables from .env file
 load_dotenv()
 
-# Настройка логирования
+# Logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
 logger = logging.getLogger('discord_bot')
 
@@ -15,32 +16,56 @@ logger = logging.getLogger('discord_bot')
 class MyBot(commands.Bot):
     def __init__(self, *, intents: discord.Intents):
         super().__init__(command_prefix="!", intents=intents)
-        self.initial_extensions = ['modules.admin']  # Список модулей для загрузки
+        self.initial_extensions = ['modules.admin', 'modules.stats']  # List of modules to load
 
     async def setup_hook(self):
-        logger.info("Начинается загрузка модулей...")
+        logger.info("Starting module loading...")
         for ext in self.initial_extensions:
             try:
                 await self.load_extension(ext)
-                logger.info(f"Модуль {ext} успешно загружен.")
+                logger.info(f"Module {ext} loaded successfully.")
             except Exception as e:
-                logger.error(f"Не удалось загрузить модуль {ext}. Ошибка: {e}")
+                logger.error(f"Failed to load module {ext}. Error: {e}")
 
-        # Синхронизация слеш-команд
+        # Sync slash commands globally
         try:
             synced = await self.tree.sync()
-            logger.info(f"Синхронизировано {len(synced)} слеш-команд.")
+            logger.info(f"Synced {len(synced)} slash commands globally.")
         except Exception as e:
-            logger.error(f"Не удалось синхронизировать слеш-команды. Ошибка: {e}")
+            logger.error(f"Failed to sync slash commands. Error: {e}")
 
     async def on_ready(self):
-        logger.info(f'Бот {self.user} успешно подключен и готов к работе!')
-        print(f'{self.user} has connected to Discord!')
+        logger.info(f'Bot {self.user} successfully connected and ready to work!')
+        logger.info(f'{self.user} has connected to Discord!')
 
 
 intents = discord.Intents.default()
-intents.message_content = True  # Включаем интенты для содержимого сообщений
+intents.message_content = True  # Enable message content intents
 bot = MyBot(intents=intents)
+
+
+# Global error handler for app commands
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.CommandInvokeError):
+        original = error.original
+        if isinstance(original, discord.errors.NotFound):
+            # Interaction expired - silently log, user already sees "interaction failed"
+            logger.warning(f"Interaction expired for command '{interaction.command.name}' from {interaction.user}")
+            return
+    
+    # Log other errors
+    logger.error(f"Error in command '{interaction.command.name}': {error}")
+    
+    # Try to respond if possible
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(f"❌ An error occurred: {str(error)[:100]}", ephemeral=True)
+        else:
+            await interaction.response.send_message(f"❌ An error occurred: {str(error)[:100]}", ephemeral=True)
+    except:
+        pass  # Can't respond, interaction is dead
+
 
 @bot.command()
 async def sync(ctx, spec: str = None):
@@ -58,11 +83,12 @@ async def sync(ctx, spec: str = None):
         synced = await ctx.bot.tree.sync()
         await ctx.send(f"Synced {len(synced)} commands globally. (May take up to 1 hour).")
 
-# Запуск бота
+# Run bot
 if __name__ == "__main__":
     TOKEN = os.getenv('DISCORD_TOKEN')
     if not TOKEN:
         logger.error(
-            "Токен бота не найден в переменных окружения. Убедитесь, что DISCORD_TOKEN установлен в вашем .env файле.")
+            "Bot token not found in environment variables. Ensure DISCORD_TOKEN is set in your .env file.")
     else:
         bot.run(TOKEN)
+
