@@ -17,6 +17,11 @@ class MyBot(commands.Bot):
     def __init__(self, *, intents: discord.Intents):
         super().__init__(command_prefix="!", intents=intents)
         self.initial_extensions = ['modules.admin', 'modules.stats']  # List of modules to load
+        
+        # Initialize database tables on startup
+        from database import database_manager as db_manager
+        db_manager.create_tables()
+        logger.info("Database tables initialized/verified.")
 
     async def setup_hook(self):
         logger.info("Starting module loading...")
