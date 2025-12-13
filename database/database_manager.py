@@ -7,7 +7,7 @@ import pandas as pd
 logger = logging.getLogger('db_manager')
 
 # Define database path
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
 DATABASE_PATH = os.path.join(DATA_DIR, 'kvk_data.db')
 

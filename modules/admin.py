@@ -565,10 +565,9 @@ class Admin(commands.Cog):
                 return True
         return False
 
-    def log_to_channel(self, interaction: discord.Interaction, action: str, details: str):
-        """Logs an admin action to the specified Discord channel (non-blocking)."""
-        # Fire-and-forget: don't await, just schedule the task
-        asyncio.create_task(self._do_log_to_channel(interaction, action, details))
+    async def log_to_channel(self, interaction: discord.Interaction, action: str, details: str):
+        """Logs an admin action to the specified Discord channel."""
+        await self._do_log_to_channel(interaction, action, details)
     
     async def _do_log_to_channel(self, interaction: discord.Interaction, action: str, details: str):
         """Internal method that actually performs the logging."""
