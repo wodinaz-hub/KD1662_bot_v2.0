@@ -605,13 +605,13 @@ class Admin(commands.Cog):
         log_channel_id = int(os.getenv('LOG_CHANNEL_ID', 0))
         if log_channel_id != 0 and interaction.channel_id != log_channel_id:
             await interaction.response.send_message(f"This command can only be used in the logging channel <#{log_channel_id}>.", ephemeral=True)
-            self.log_to_channel(interaction, "Command Failed", f"Command: /export_logs\nReason: Wrong channel (Attempted in {interaction.channel.name})")
+            await self.log_to_channel(interaction, "Command Failed", f"Command: /export_logs\nReason: Wrong channel (Attempted in {interaction.channel.name})")
             return
             
         logs = db_manager.get_all_admin_logs()
         if not logs:
             await interaction.response.send_message("No logs found in the database.", ephemeral=True)
-            self.log_to_channel(interaction, "Command Failed", "Command: /export_logs\nReason: Database empty")
+            await self.log_to_channel(interaction, "Command Failed", "Command: /export_logs\nReason: Database empty")
             return
             
         # Create CSV content
@@ -636,7 +636,7 @@ class Admin(commands.Cog):
         file = discord.File(io.BytesIO(output.getvalue().encode()), filename="admin_logs.csv")
         
         await interaction.response.send_message(f"Found {len(logs)} logs.", file=file, ephemeral=True)
-        self.log_to_channel(interaction, "Command Used", "Command: /export_logs")
+        await self.log_to_channel(interaction, "Command Used", "Command: /export_logs")
 
     @app_commands.command(name="set_kvk", description="Sets the current KvK season (admin only).")
     @app_commands.default_permissions(administrator=True)
@@ -653,12 +653,12 @@ class Admin(commands.Cog):
                 "Sorry, the list of available KvK is empty. Please contact the developer.",
                 ephemeral=True
             )
-            self.log_to_channel(interaction, "Command Failed", "Command: /set_kvk\nReason: KVK_OPTIONS empty")
+            await self.log_to_channel(interaction, "Command Failed", "Command: /set_kvk\nReason: KVK_OPTIONS empty")
             return
 
         # Respond to the interaction by sending the View (dropdown menu)
         await interaction.response.send_message("Select the current KvK:", view=KvKSelectView(interaction, self))
-        self.log_to_channel(interaction, "Command Used", "Command: /set_kvk")
+        await self.log_to_channel(interaction, "Command Used", "Command: /set_kvk")
 
     @app_commands.command(name="status", description="Check the current status of the bot (Active KvK, Requirements).")
     @app_commands.default_permissions(administrator=True)
@@ -686,7 +686,7 @@ class Admin(commands.Cog):
             embed.description = "Use `/set_kvk` to select a season."
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
-        self.log_to_channel(interaction, "Command Used", "Command: /status")
+        await self.log_to_channel(interaction, "Command Used", "Command: /status")
 
     @app_commands.command(name="set_requirements_text", description="Enter KvK requirements via text paste.")
     @app_commands.default_permissions(administrator=True)
@@ -698,11 +698,11 @@ class Admin(commands.Cog):
         current_kvk = db_manager.get_current_kvk_name()
         if not current_kvk or current_kvk == "Not set":
             await interaction.response.send_message("Please set the current KvK season first using /set_kvk.", ephemeral=True)
-            self.log_to_channel(interaction, "Command Failed", f"Command: /{interaction.command.name}\nReason: No active KvK")
+            await self.log_to_channel(interaction, "Command Failed", f"Command: /{interaction.command.name}\nReason: No active KvK")
             return
 
         await interaction.response.send_modal(RequirementsModal(self))
-        self.log_to_channel(interaction, "Command Used", "Command: /set_requirements_text")
+        await self.log_to_channel(interaction, "Command Used", "Command: /set_requirements_text")
 
     @app_commands.command(name="finish_kvk", description="Finish the current KvK season and archive data.")
     @app_commands.default_permissions(administrator=True)
@@ -715,7 +715,7 @@ class Admin(commands.Cog):
         
         if not current_kvk_name or current_kvk_name == "Not set":
             await interaction.response.send_message("No KvK season is currently active.", ephemeral=True)
-            self.log_to_channel(interaction, "Command Failed", f"Command: /{interaction.command.name}\nReason: No active KvK")
+            await self.log_to_channel(interaction, "Command Failed", f"Command: /{interaction.command.name}\nReason: No active KvK")
             return
 
         # Confirm action
@@ -725,7 +725,7 @@ class Admin(commands.Cog):
             view=FinishKvKConfirmView(interaction, current_kvk_name, self),
             ephemeral=True
         )
-        self.log_to_channel(interaction, "Command Used", "Command: /finish_kvk")
+        await self.log_to_channel(interaction, "Command Used", "Command: /finish_kvk")
 
     # NOTE: Slash commands for file uploads (/upload_snapshot, /set_requirements) removed
     # due to Discord's 3-second interaction timeout issues with file attachments.
@@ -743,7 +743,7 @@ class Admin(commands.Cog):
         current_kvk = db_manager.get_current_kvk_name()
         if not current_kvk or current_kvk == "Not set":
             await interaction.response.send_message("Please set the current KvK season first using /set_kvk.", ephemeral=True)
-            self.log_to_channel(interaction, "Command Failed", f"Command: /{interaction.command.name}\nReason: No active KvK")
+            await self.log_to_channel(interaction, "Command Failed", f"Command: /{interaction.command.name}\nReason: No active KvK")
             return
 
         await interaction.response.defer(ephemeral=True)
@@ -753,10 +753,10 @@ class Admin(commands.Cog):
 
         if success:
             await interaction.followup.send(f"Calculation successful: {message}")
-            self.log_to_channel(interaction, "Calculate Period", f"KvK: {current_kvk}\nPeriod: {period_name}\nResult: {message}")
+            await self.log_to_channel(interaction, "Calculate Period", f"KvK: {current_kvk}\nPeriod: {period_name}\nResult: {message}")
         else:
             await interaction.followup.send(f"Calculation failed: {message}")
-            self.log_to_channel(interaction, "Calculate Period Failed", f"KvK: {current_kvk}\nPeriod: {period_name}\nError: {message}")
+            await self.log_to_channel(interaction, "Calculate Period Failed", f"KvK: {current_kvk}\nPeriod: {period_name}\nError: {message}")
 
     @app_commands.command(name="view_requirements", description="View current KvK requirements.")
     @app_commands.default_permissions(administrator=True)
@@ -773,7 +773,7 @@ class Admin(commands.Cog):
         reqs = db_manager.get_all_requirements(current_kvk)
         if not reqs:
             await interaction.response.send_message(f"No requirements set for **{current_kvk}**.", ephemeral=True)
-            self.log_to_channel(interaction, "Command Failed", f"Command: /view_requirements\nReason: No requirements set for {current_kvk}")
+            await self.log_to_channel(interaction, "Command Failed", f"Command: /view_requirements\nReason: No requirements set for {current_kvk}")
             return
 
         embed = discord.Embed(title=f"Requirements for {current_kvk}", color=discord.Color.blue())
@@ -791,7 +791,7 @@ class Admin(commands.Cog):
         
         embed.description = desc
         await interaction.response.send_message(embed=embed, ephemeral=True)
-        self.log_to_channel(interaction, "Command Used", "Command: /view_requirements")
+        await self.log_to_channel(interaction, "Command Used", "Command: /view_requirements")
 
     @app_commands.command(name="list_linked_accounts", description="List all linked Discord accounts.")
     @app_commands.default_permissions(administrator=True)
@@ -808,7 +808,7 @@ class Admin(commands.Cog):
         view = LinkedAccountsPaginationView(accounts)
         view.update_buttons()
         await interaction.response.send_message(embed=view.create_embed(), view=view, ephemeral=True)
-        self.log_to_channel(interaction, "Command Used", "Command: /list_linked_accounts")
+        await self.log_to_channel(interaction, "Command Used", "Command: /list_linked_accounts")
 
     @app_commands.command(name="admin_link_account", description="Link a player ID to a specific Discord user.")
     @app_commands.describe(user="The Discord user", player_id="The game ID")
@@ -832,10 +832,10 @@ class Admin(commands.Cog):
         
         if db_manager.link_account(discord_id, player_id, 'main' if is_main else 'alt'):
             await interaction.response.send_message(f"✅ Successfully linked ID `{player_id}` to {user.mention}.", ephemeral=True)
-            self.log_to_channel(interaction, "Admin Link Account", f"User: {user.mention} ({user.id})\nPlayer ID: {player_id}")
+            await self.log_to_channel(interaction, "Admin Link Account", f"User: {user.mention} ({user.id})\nPlayer ID: {player_id}")
         else:
             await interaction.response.send_message("❌ Failed to link account.", ephemeral=True)
-            self.log_to_channel(interaction, "Admin Link Account Failed", f"User: {user.mention}\nPlayer ID: {player_id}")
+            await self.log_to_channel(interaction, "Admin Link Account Failed", f"User: {user.mention}\nPlayer ID: {player_id}")
 
     @app_commands.command(name="admin_unlink_account", description="Unlink a game account from a Discord user.")
     @app_commands.describe(player_id="The game ID to unlink")
@@ -872,7 +872,7 @@ class Admin(commands.Cog):
             
         if db_manager.unlink_account(target_link['discord_id'], player_id):
              await interaction.response.send_message(f"✅ Successfully unlinked ID `{player_id}` from <@{target_link['discord_id']}>.", ephemeral=True)
-             self.log_to_channel(interaction, "Admin Force Unlink", f"Player ID: {player_id}\nOwner: {target_link['discord_id']}")
+             await self.log_to_channel(interaction, "Admin Force Unlink", f"Player ID: {player_id}\nOwner: {target_link['discord_id']}")
         else:
              await interaction.response.send_message("❌ Failed to unlink account.", ephemeral=True)
 
@@ -930,7 +930,7 @@ class Admin(commands.Cog):
         file = discord.File(io.BytesIO(output.getvalue().encode()), filename=f"leaderboard_{current_kvk}.csv")
         
         await interaction.followup.send(f"Leaderboard for **{current_kvk}** ({len(data)} players)", file=file)
-        self.log_to_channel(interaction, "Command Used", "Command: /export_leaderboard")
+        await self.log_to_channel(interaction, "Command Used", "Command: /export_leaderboard")
 
     @app_commands.command(name="set_reward_role", description="Set the Discord role to be given to compliant players.")
     @app_commands.describe(role="The role to assign")
@@ -942,7 +942,7 @@ class Admin(commands.Cog):
             
         if db_manager.set_reward_role(role.id):
             await interaction.response.send_message(f"✅ Reward role set to: {role.mention}", ephemeral=True)
-            self.log_to_channel(interaction, "Set Reward Role", f"Role: {role.name} ({role.id})")
+            await self.log_to_channel(interaction, "Set Reward Role", f"Role: {role.name} ({role.id})")
         else:
             await interaction.response.send_message("❌ Failed to set reward role.", ephemeral=True)
 
@@ -963,7 +963,7 @@ class Admin(commands.Cog):
             view=ResetBotConfirmView(self),
             ephemeral=True
         )
-        self.log_to_channel(interaction, "Command Used", "Command: /reset_bot")
+        await self.log_to_channel(interaction, "Command Used", "Command: /reset_bot")
 
 
     @app_commands.command(name="kvk_setup", description="🧙‍♂️ Guided wizard to set up a new KvK season.")
@@ -980,7 +980,7 @@ class Admin(commands.Cog):
         embed.add_field(name="Step 1", value="Select the KvK Season", inline=False)
         
         await interaction.followup.send(embed=embed, view=WizardKvKSelectView(self), ephemeral=True)
-        self.log_to_channel(interaction, "Command Used", "Command: /kvk_setup")
+        await self.log_to_channel(interaction, "Command Used", "Command: /kvk_setup")
 
 
     @app_commands.command(name="check_compliance", description="Check which players met the requirements.")
@@ -1051,7 +1051,7 @@ class Admin(commands.Cog):
         file = discord.File(io.StringIO(report_content), filename=f"compliance_report_{current_kvk}.txt")
         
         await interaction.followup.send(f"Compliance check complete. Found {len(compliant_players)} compliant and {len(non_compliant_players)} non-compliant players.", file=file)
-        self.log_to_channel(interaction, "Check Compliance", f"KvK: {current_kvk}\nCompliant: {len(compliant_players)}\nNon-Compliant: {len(non_compliant_players)}")
+        await self.log_to_channel(interaction, "Check Compliance", f"KvK: {current_kvk}\nCompliant: {len(compliant_players)}\nNon-Compliant: {len(non_compliant_players)}")
         
         # Auto-Role Distribution
         reward_role_id = db_manager.get_reward_role()
