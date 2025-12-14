@@ -267,10 +267,14 @@ class Stats(commands.Cog):
                 file = discord.File(img_buffer, filename="stats_card.png")
                 embed.set_image(url="attachment://stats_card.png")
         
+        kwargs = {'embed': embed}
+        if file:
+            kwargs['file'] = file
+            
         if interaction.response.is_done():
-            await interaction.followup.send(embed=embed, file=file)
+            await interaction.followup.send(**kwargs, ephemeral=False)
         else:
-            await interaction.response.send_message(embed=embed, file=file)
+            await interaction.response.send_message(**kwargs, ephemeral=False)
 
     async def show_total_stats(self, interaction: discord.Interaction, accounts, kvk_name: str):
         # Get all player IDs for batch query
