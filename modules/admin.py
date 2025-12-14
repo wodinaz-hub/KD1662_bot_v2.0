@@ -431,14 +431,18 @@ class LeaderboardPaginationView(discord.ui.View):
 
         embed = discord.Embed(
             title=f"{self.title} - {self.kvk_name}",
-            description="**Formula:** T4×4 + T5×10 + Deaths×15",
+            description="**Formula:** T4×4 + T5×10 + Deaths×15\n✅ = Met Requirements | ❌ = Failed",
             color=discord.Color.gold()
         )
 
         leaderboard_text = ""
         for i, player in enumerate(page_data, start + 1):
             medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
-            leaderboard_text += f"{medal} **{player['player_name']}** — {player['dkp']:,} DKP\n"
+            
+            # Status icon
+            status_icon = "✅" if player.get('compliant', False) else "❌"
+            
+            leaderboard_text += f"{medal} **{player['player_name']}** {status_icon} — {player['dkp']:,} DKP\n"
             leaderboard_text += f"   T4: {player['t4']:,} | T5: {player['t5']:,} | Deaths: {player['deaths']:,}\n"
 
         if not leaderboard_text:
@@ -898,9 +902,9 @@ class Admin(commands.Cog):
         # Calculate DKP
         data = []
         for stat in all_stats:
-            t4 = stat.get('t4_kills', 0) or 0
-            t5 = stat.get('t5_kills', 0) or 0
-            deaths = stat.get('deaths', 0) or 0
+            t4 = stat.get('total_t4_kills', 0) or 0
+            t5 = stat.get('total_t5_kills', 0) or 0
+            deaths = stat.get('total_deaths', 0) or 0
             dkp = (t4 * 4) + (t5 * 10) + (deaths * 15)
             total_kills = t4 + t5
             
@@ -1131,17 +1135,28 @@ class Admin(commands.Cog):
         # DKP = T4*4 + T5*10 + Deaths*15
         player_dkp = []
         for stat in all_stats:
-            t4 = stat.get('t4_kills', 0) or 0
-            t5 = stat.get('t5_kills', 0) or 0
-            deaths = stat.get('deaths', 0) or 0
+            t4 = stat.get('total_t4_kills', 0) or 0
+            t5 = stat.get('total_t5_kills', 0) or 0
+            deaths = stat.get('total_deaths', 0) or 0
             dkp = (t4 * 4) + (t5 * 10) + (deaths * 15)
+            
+            # Check compliance
+            reqs = db_manager.get_requirements(current_kvk, stat['total_power'])
+            compliant = False
+            if reqs:
+                total_kills = t4 + t5
+                kills_met = total_kills >= reqs['required_kills']
+                deaths_met = deaths >= reqs['required_deaths']
+                compliant = kills_met and deaths_met
+            
             player_dkp.append({
                 'player_id': stat['player_id'],
                 'player_name': stat['player_name'],
                 't4': t4,
                 't5': t5,
                 'deaths': deaths,
-                'dkp': dkp
+                'dkp': dkp,
+                'compliant': compliant
             })
         
         # Sort by DKP descending
@@ -1294,6 +1309,20 @@ class Admin(commands.Cog):
             await msg.edit(content=f"✅ Snapshot '{snapshot_type}' for period '{period_name}' uploaded successfully!")
         else:
             await msg.edit(content="❌ Failed to import snapshot. Check that your Excel file has the correct columns.")
+
+    @commands.command(name="export_db")
+    async def msg_export_db(self, ctx: commands.Context):
+        """Export the entire database file (Backup)."""
+        if not self.is_admin_ctx(ctx):
+            await ctx.send("❌ You do not have permissions to use this command.")
+            return
+            
+        db_path = db_manager.DATABASE_PATH
+        if not os.path.exists(db_path):
+            await ctx.send("❌ Database file not found.")
+            return
+            
+        await ctx.send("📦 Exporting database...", file=discord.File(db_path, filename="kvk_data_backup.db"))
 
 
 async def setup(bot: commands.Bot):
