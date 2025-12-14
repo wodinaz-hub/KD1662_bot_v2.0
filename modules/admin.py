@@ -987,6 +987,71 @@ class Admin(commands.Cog):
         await self.log_to_channel(interaction, "Command Used", "Command: /kvk_setup")
 
 
+class CompliancePaginationView(discord.ui.View):
+    def __init__(self, data, title, kvk_name):
+        super().__init__(timeout=180)
+        self.data = data
+        self.title = title
+        self.kvk_name = kvk_name
+        self.per_page = 8  # Fewer items per page due to more text
+        self.current_page = 0
+        self.total_pages = (len(data) - 1) // self.per_page + 1
+
+    def create_embed(self):
+        start = self.current_page * self.per_page
+        end = start + self.per_page
+        page_data = self.data[start:end]
+
+        embed = discord.Embed(
+            title=f"{self.title} - {self.kvk_name}",
+            description="✅ = Met | ❌ = Failed\nFormat: Current / Required",
+            color=discord.Color.blue()
+        )
+
+        for player in page_data:
+            status_icon = "✅" if player['compliant'] else "❌"
+            
+            # Format numbers (e.g. 1.5M)
+            def fmt(num):
+                if num >= 1_000_000_000: return f"{num/1_000_000_000:.1f}B"
+                if num >= 1_000_000: return f"{num/1_000_000:.1f}M"
+                if num >= 1_000: return f"{num/1_000:.1f}K"
+                return str(num)
+
+            kills_str = f"{fmt(player['kills'])} / {fmt(player['req_kills'])}"
+            deaths_str = f"{fmt(player['deaths'])} / {fmt(player['req_deaths'])}"
+            
+            field_name = f"{status_icon} {player['name']} ({fmt(player['power'])})"
+            field_value = f"⚔️ Kills: **{kills_str}**\n💀 Deaths: **{deaths_str}**"
+            
+            if not player['compliant']:
+                missing = []
+                if player['kills'] < player['req_kills']: missing.append("Kills")
+                if player['deaths'] < player['req_deaths']: missing.append("Deaths")
+                field_value += f"\n⚠️ Failed: {', '.join(missing)}"
+
+            embed.add_field(name=field_name, value=field_value, inline=False)
+
+        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} | Total: {len(self.data)}")
+        return embed
+
+    def update_buttons(self):
+        self.children[0].disabled = self.current_page == 0
+        self.children[1].disabled = self.current_page == self.total_pages - 1
+
+    @discord.ui.button(label="Previous", style=discord.ButtonStyle.primary, disabled=True)
+    async def previous_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page -= 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.create_embed(), view=self)
+
+    @discord.ui.button(label="Next", style=discord.ButtonStyle.primary)
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page += 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.create_embed(), view=self)
+
+
     @app_commands.command(name="check_compliance", description="Check which players met the requirements.")
     @app_commands.default_permissions(administrator=True)
     async def check_compliance(self, interaction: discord.Interaction):
@@ -1008,65 +1073,43 @@ class Admin(commands.Cog):
             await interaction.followup.send("No stats found for this KvK season.")
             return
 
-        compliant_players = []
-        non_compliant_players = []
+        compliance_data = []
 
         for player in all_stats:
             reqs = db_manager.get_requirements(current_kvk, player['total_power'])
-            if not reqs:
-                # No requirements found for this power level (maybe too low or high?)
-                # Treat as non-compliant or skip? Let's list as "No Reqs"
-                non_compliant_players.append(f"{player['player_name']} (ID: {player['player_id']}) - Power: {player['total_power']:,} - No Requirements Found")
-                continue
-
-            # Check compliance
-            # Check compliance
-            # Logic Update: Use T4 + T5 kills instead of Kill Points
+            
+            # Default values if no reqs found (treat as 0 reqs or handle as error)
+            req_kills = reqs['required_kills'] if reqs else 0
+            req_deaths = reqs['required_deaths'] if reqs else 0
+            
             t4 = player.get('total_t4_kills', 0) or 0
             t5 = player.get('total_t5_kills', 0) or 0
             total_kills = t4 + t5
+            total_deaths = player.get('total_deaths', 0) or 0
             
-            kills_met = total_kills >= reqs['required_kills']
-            deaths_met = player['total_deaths'] >= reqs['required_deaths']
-            
-            status_str = f"{player['player_name']} (ID: {player['player_id']}) - Power: {player['total_power']:,} | Kills: {total_kills:,}/{reqs['required_kills']:,} | Deaths: {player['total_deaths']:,}/{reqs['required_deaths']:,}"
+            kills_met = total_kills >= req_kills
+            deaths_met = total_deaths >= req_deaths
+            compliant = kills_met and deaths_met and (reqs is not None)
 
-            if kills_met and deaths_met:
-                compliant_players.append(status_str)
-            else:
-                missing = []
-                if not kills_met: missing.append("Kills")
-                if not deaths_met: missing.append("Deaths")
-                non_compliant_players.append(f"{status_str} - FAILED: {', '.join(missing)}")
+            compliance_data.append({
+                'name': player['player_name'],
+                'power': player['total_power'],
+                'kills': total_kills,
+                'deaths': total_deaths,
+                'req_kills': req_kills,
+                'req_deaths': req_deaths,
+                'compliant': compliant,
+                'has_reqs': reqs is not None
+            })
 
-        # Create report file
-        report_lines = [f"Compliance Report for {current_kvk}\n"]
-        report_lines.append(f"Total Players: {len(all_stats)}")
-        report_lines.append(f"Compliant: {len(compliant_players)}")
-        report_lines.append(f"Non-Compliant: {len(non_compliant_players)}\n")
+        # Sort: Non-compliant first, then by power descending
+        compliance_data.sort(key=lambda x: (x['compliant'], -x['power']))
         
-        report_lines.append("=== COMPLIANT PLAYERS ===")
-        report_lines.extend(compliant_players)
-        report_lines.append("\n=== NON-COMPLIANT PLAYERS ===")
-        report_lines.extend(non_compliant_players)
+        view = CompliancePaginationView(compliance_data, "📋 Compliance Report", current_kvk)
+        view.update_buttons()
+        await interaction.followup.send(embed=view.create_embed(), view=view)
         
-        report_content = "\n".join(report_lines)
-        
-        file = discord.File(io.StringIO(report_content), filename=f"compliance_report_{current_kvk}.txt")
-        
-        await interaction.followup.send(f"Compliance check complete. Found {len(compliant_players)} compliant and {len(non_compliant_players)} non-compliant players.", file=file)
-        await self.log_to_channel(interaction, "Check Compliance", f"KvK: {current_kvk}\nCompliant: {len(compliant_players)}\nNon-Compliant: {len(non_compliant_players)}")
-        
-        # Auto-Role Distribution
-        reward_role_id = db_manager.get_reward_role()
-        if reward_role_id:
-            role = interaction.guild.get_role(reward_role_id)
-            if role:
-                # Find linked users who are compliant
-                # This can be slow, so maybe run in background or just notify
-                await interaction.followup.send(f"ℹ️ Reward role configured: {role.mention}. Auto-assignment is not fully implemented in this check to avoid rate limits. Please use a dedicated command if needed (Future Feature).")
-            else:
-                await interaction.followup.send("⚠️ Reward role ID found in DB but role does not exist in server.")
+        await self.log_to_channel(interaction, "Check Compliance", f"KvK: {current_kvk}\nChecked {len(compliance_data)} players")
 
     @app_commands.command(name="help", description="📖 Show all available commands.")
     async def help_command(self, interaction: discord.Interaction):
