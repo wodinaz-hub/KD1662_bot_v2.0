@@ -36,17 +36,17 @@ class Stats(commands.Cog):
 
     @app_commands.command(name='link_account', description='Link your game account to your Discord.')
     async def link_account(self, interaction: discord.Interaction):
-        await interaction.response.send_message("Select account type to link:", view=LinkAccountView(self), ephemeral=False)
+        await interaction.response.send_message("Select account type to link:", view=LinkAccountView(self), ephemeral=True)
         await self.log_to_channel(interaction, "Command Used", "Command: /link_account")
 
     @app_commands.command(name='unlink_account', description='Unlink a game account.')
     async def unlink_account(self, interaction: discord.Interaction):
         accounts = db_manager.get_linked_accounts(interaction.user.id)
         if not accounts:
-            await interaction.response.send_message("You have no linked accounts.", ephemeral=False)
+            await interaction.response.send_message("You have no linked accounts.", ephemeral=True)
             return
 
-        await interaction.response.send_message("Select account to unlink:", view=UnlinkAccountView(accounts, self), ephemeral=False)
+        await interaction.response.send_message("Select account to unlink:", view=UnlinkAccountView(accounts, self), ephemeral=True)
         await self.log_to_channel(interaction, "Command Used", "Command: /unlink_account")
 
     @app_commands.command(name='my_stats', description='Show statistics for your linked accounts.')
