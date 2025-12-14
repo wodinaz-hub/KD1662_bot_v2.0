@@ -958,13 +958,13 @@ class Admin(commands.Cog):
             await interaction.response.send_message("No KvK season is currently active.", ephemeral=True)
             return
             
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
         
         all_stats = db_manager.get_all_kvk_stats(current_kvk)
         if not all_stats:
             await interaction.followup.send("No stats available.")
             return
-            
+
         # Calculate DKP
         data = []
         for stat in all_stats:
@@ -1068,7 +1068,7 @@ class Admin(commands.Cog):
             await interaction.response.send_message("No KvK season is currently active.", ephemeral=True)
             return
 
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
 
         # Get all players stats for this KvK
         all_stats = db_manager.get_all_kvk_stats(current_kvk)
