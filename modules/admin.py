@@ -140,16 +140,16 @@ class RequirementsModal(discord.ui.Modal, title="Set KvK Requirements"):
         parsed_reqs = self.parse_requirements(text)
         
         if not parsed_reqs:
-            await interaction.response.send_message("❌ Could not parse any requirements from the text.", ephemeral=True)
+            await interaction.response.send_message("❌ Could not parse any requirements from the text.", ephemeral=False)
             await self.admin_cog.log_to_channel(interaction, "Set Requirements Failed", "Reason: Parsing error")
             return
             
         current_kvk = db_manager.get_current_kvk_name()
         if db_manager.save_requirements_batch(current_kvk, parsed_reqs):
-            await interaction.response.send_message(f"✅ Successfully saved {len(parsed_reqs)} requirement brackets for **{current_kvk}**.", ephemeral=True)
+            await interaction.response.send_message(f"✅ Successfully saved {len(parsed_reqs)} requirement brackets for **{current_kvk}**.", ephemeral=False)
             await self.admin_cog.log_to_channel(interaction, "Set Requirements (Text)", f"KvK: {current_kvk}\nBrackets: {len(parsed_reqs)}")
         else:
-            await interaction.response.send_message("❌ Database error while saving requirements.", ephemeral=True)
+            await interaction.response.send_message("❌ Database error while saving requirements.", ephemeral=False)
 
     def parse_requirements(self, text):
         requirements = []
@@ -354,7 +354,7 @@ class WizardRequirementsModal(discord.ui.Modal, title="Wizard: Set Requirements"
         parsed_reqs = dummy_modal.parse_requirements(text)
         
         if not parsed_reqs:
-            await interaction.response.send_message("❌ Could not parse requirements. Please try again.", ephemeral=True)
+            await interaction.response.send_message("❌ Could not parse requirements. Please try again.", ephemeral=False)
             return
 
         if db_manager.save_requirements_batch(self.kvk_name, parsed_reqs):
@@ -365,7 +365,7 @@ class WizardRequirementsModal(discord.ui.Modal, title="Wizard: Set Requirements"
             
             await interaction.response.edit_message(embed=embed, view=WizardConfirmationView(self.kvk_name, len(parsed_reqs), self.admin_cog))
         else:
-            await interaction.response.send_message("❌ Database error.", ephemeral=True)
+            await interaction.response.send_message("❌ Database error.", ephemeral=False)
 
 class WizardRequirementsView(discord.ui.View):
     def __init__(self, kvk_name, admin_cog):
@@ -665,19 +665,19 @@ class Admin(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def export_logs(self, interaction: discord.Interaction):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
             return
             
         # Check if command is used in the logging channel
         log_channel_id = int(os.getenv('LOG_CHANNEL_ID', 0))
         if log_channel_id != 0 and interaction.channel_id != log_channel_id:
-            await interaction.response.send_message(f"This command can only be used in the logging channel <#{log_channel_id}>.", ephemeral=True)
+            await interaction.response.send_message(f"This command can only be used in the logging channel <#{log_channel_id}>.", ephemeral=False)
             await self.log_to_channel(interaction, "Command Failed", f"Command: /export_logs\nReason: Wrong channel (Attempted in {interaction.channel.name})")
             return
             
         logs = db_manager.get_all_admin_logs()
         if not logs:
-            await interaction.response.send_message("No logs found in the database.", ephemeral=True)
+            await interaction.response.send_message("No logs found in the database.", ephemeral=False)
             await self.log_to_channel(interaction, "Command Failed", "Command: /export_logs\nReason: Database empty")
             return
             
@@ -702,7 +702,7 @@ class Admin(commands.Cog):
         output.seek(0)
         file = discord.File(io.BytesIO(output.getvalue().encode()), filename="admin_logs.csv")
         
-        await interaction.response.send_message(f"Found {len(logs)} logs.", file=file, ephemeral=True)
+        await interaction.response.send_message(f"Found {len(logs)} logs.", file=file, ephemeral=False)
         await self.log_to_channel(interaction, "Command Used", "Command: /export_logs")
 
     @app_commands.command(name="set_kvk", description="Sets the current KvK season (admin only).")
@@ -710,7 +710,7 @@ class Admin(commands.Cog):
     async def set_kvk_command(self, interaction: discord.Interaction):
         # Role permission check
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
             return
 
         # Check the list of options before creating the View
@@ -718,7 +718,7 @@ class Admin(commands.Cog):
             logger.error("KVK_OPTIONS list is empty. Cannot create a select menu.")
             await interaction.response.send_message(
                 "Sorry, the list of available KvK is empty. Please contact the developer.",
-                ephemeral=True
+                ephemeral=False
             )
             await self.log_to_channel(interaction, "Command Failed", "Command: /set_kvk\nReason: KVK_OPTIONS empty")
             return
@@ -731,7 +731,7 @@ class Admin(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def status(self, interaction: discord.Interaction):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
             return
 
         # Get current KvK
@@ -752,19 +752,19 @@ class Admin(commands.Cog):
             embed.add_field(name="Current KvK Season", value="❌ Not selected", inline=False)
             embed.description = "Use `/set_kvk` to select a season."
 
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed, ephemeral=False)
         await self.log_to_channel(interaction, "Command Used", "Command: /status")
 
     @app_commands.command(name="set_requirements_text", description="Enter KvK requirements via text paste.")
     @app_commands.default_permissions(administrator=True)
     async def set_requirements_text(self, interaction: discord.Interaction):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
             return
 
         current_kvk = db_manager.get_current_kvk_name()
         if not current_kvk or current_kvk == "Not set":
-            await interaction.response.send_message("Please set the current KvK season first using /set_kvk.", ephemeral=True)
+            await interaction.response.send_message("Please set the current KvK season first using /set_kvk.", ephemeral=False)
             await self.log_to_channel(interaction, "Command Failed", f"Command: /{interaction.command.name}\nReason: No active KvK")
             return
 
@@ -775,13 +775,13 @@ class Admin(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def finish_kvk(self, interaction: discord.Interaction):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
             return
 
         current_kvk_name = db_manager.get_current_kvk_name()
         
         if not current_kvk_name or current_kvk_name == "Not set":
-            await interaction.response.send_message("No KvK season is currently active.", ephemeral=True)
+            await interaction.response.send_message("No KvK season is currently active.", ephemeral=False)
             await self.log_to_channel(interaction, "Command Failed", f"Command: /{interaction.command.name}\nReason: No active KvK")
             return
 
@@ -790,7 +790,7 @@ class Admin(commands.Cog):
             f"Are you sure you want to finish **{current_kvk_name}**?\n"
             "This will archive all stats and snapshots with today's date and reset the active season.",
             view=FinishKvKConfirmView(interaction, current_kvk_name, self),
-            ephemeral=True
+            ephemeral=False
         )
         await self.log_to_channel(interaction, "Command Used", "Command: /finish_kvk")
 
@@ -804,16 +804,16 @@ class Admin(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def calculate_period(self, interaction: discord.Interaction, period_name: str):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
             return
 
         current_kvk = db_manager.get_current_kvk_name()
         if not current_kvk or current_kvk == "Not set":
-            await interaction.response.send_message("Please set the current KvK season first using /set_kvk.", ephemeral=True)
+            await interaction.response.send_message("Please set the current KvK season first using /set_kvk.", ephemeral=False)
             await self.log_to_channel(interaction, "Command Failed", f"Command: /{interaction.command.name}\nReason: No active KvK")
             return
 
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
 
         from core import calculation
         success, message = calculation.calculate_period_results(current_kvk, period_name)
@@ -829,17 +829,17 @@ class Admin(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def view_requirements(self, interaction: discord.Interaction):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
             return
 
         current_kvk = db_manager.get_current_kvk_name()
         if not current_kvk or current_kvk == "Not set":
-            await interaction.response.send_message("No KvK season is currently active.", ephemeral=True)
+            await interaction.response.send_message("No KvK season is currently active.", ephemeral=False)
             return
 
         reqs = db_manager.get_all_requirements(current_kvk)
         if not reqs:
-            await interaction.response.send_message(f"No requirements set for **{current_kvk}**.", ephemeral=True)
+            await interaction.response.send_message(f"No requirements set for **{current_kvk}**.", ephemeral=False)
             await self.log_to_channel(interaction, "Command Failed", f"Command: /view_requirements\nReason: No requirements set for {current_kvk}")
             return
 
@@ -857,24 +857,24 @@ class Admin(commands.Cog):
             desc += f"**{range_str}**: Kills: {kp/1_000_000:.1f}M | Deads: {deads/1_000_000:.1f}M\n"
         
         embed.description = desc
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed, ephemeral=False)
         await self.log_to_channel(interaction, "Command Used", "Command: /view_requirements")
 
     @app_commands.command(name="list_linked_accounts", description="List all linked Discord accounts.")
     @app_commands.default_permissions(administrator=True)
     async def list_linked_accounts(self, interaction: discord.Interaction):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
             return
             
         accounts = db_manager.get_all_linked_accounts_full()
         if not accounts:
-            await interaction.response.send_message("No accounts linked yet.", ephemeral=True)
+            await interaction.response.send_message("No accounts linked yet.", ephemeral=False)
             return
             
         view = LinkedAccountsPaginationView(accounts)
         view.update_buttons()
-        await interaction.response.send_message(embed=view.create_embed(), view=view, ephemeral=True)
+        await interaction.response.send_message(embed=view.create_embed(), view=view, ephemeral=False)
         await self.log_to_channel(interaction, "Command Used", "Command: /list_linked_accounts")
 
     @app_commands.command(name="admin_link_account", description="Link a player ID to a specific Discord user.")
@@ -882,7 +882,7 @@ class Admin(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def admin_link_account(self, interaction: discord.Interaction, user: discord.User, player_id: int):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
             return
             
         # Check if user already has a main account? The logic in db_manager.link_account handles is_main logic if we pass it.
@@ -898,10 +898,10 @@ class Admin(commands.Cog):
         is_main = len(existing) == 0 if existing else True
         
         if db_manager.link_account(discord_id, player_id, 'main' if is_main else 'alt'):
-            await interaction.response.send_message(f"✅ Successfully linked ID `{player_id}` to {user.mention}.", ephemeral=True)
+            await interaction.response.send_message(f"✅ Successfully linked ID `{player_id}` to {user.mention}.", ephemeral=False)
             await self.log_to_channel(interaction, "Admin Link Account", f"User: {user.mention} ({user.id})\nPlayer ID: {player_id}")
         else:
-            await interaction.response.send_message("❌ Failed to link account.", ephemeral=True)
+            await interaction.response.send_message("❌ Failed to link account.", ephemeral=False)
             await self.log_to_channel(interaction, "Admin Link Account Failed", f"User: {user.mention}\nPlayer ID: {player_id}")
 
     @app_commands.command(name="admin_unlink_account", description="Unlink a game account from a Discord user.")
@@ -909,7 +909,7 @@ class Admin(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def admin_unlink_account(self, interaction: discord.Interaction, player_id: int):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
             return
 
         # We don't need discord_id to unlink by player_id if we assume player_id is unique globally or we just unlink it from whoever has it.
@@ -934,25 +934,25 @@ class Admin(commands.Cog):
         target_link = next((acc for acc in all_links if acc['player_id'] == player_id), None)
         
         if not target_link:
-            await interaction.response.send_message(f"❌ Player ID `{player_id}` is not linked to anyone.", ephemeral=True)
+            await interaction.response.send_message(f"❌ Player ID `{player_id}` is not linked to anyone.", ephemeral=False)
             return
             
         if db_manager.unlink_account(target_link['discord_id'], player_id):
-             await interaction.response.send_message(f"✅ Successfully unlinked ID `{player_id}` from <@{target_link['discord_id']}>.", ephemeral=True)
+             await interaction.response.send_message(f"✅ Successfully unlinked ID `{player_id}` from <@{target_link['discord_id']}>.", ephemeral=False)
              await self.log_to_channel(interaction, "Admin Force Unlink", f"Player ID: {player_id}\nOwner: {target_link['discord_id']}")
         else:
-             await interaction.response.send_message("❌ Failed to unlink account.", ephemeral=True)
+             await interaction.response.send_message("❌ Failed to unlink account.", ephemeral=False)
 
     @app_commands.command(name="export_leaderboard", description="Export the DKP leaderboard as a CSV file.")
     @app_commands.default_permissions(administrator=True)
     async def export_leaderboard(self, interaction: discord.Interaction):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
             return
             
         current_kvk = db_manager.get_current_kvk_name()
         if not current_kvk or current_kvk == "Not set":
-            await interaction.response.send_message("No KvK season is currently active.", ephemeral=True)
+            await interaction.response.send_message("No KvK season is currently active.", ephemeral=False)
             return
             
         await interaction.response.defer(ephemeral=False)
@@ -1004,31 +1004,31 @@ class Admin(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def set_reward_role(self, interaction: discord.Interaction, role: discord.Role):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
             return
             
         if db_manager.set_reward_role(role.id):
-            await interaction.response.send_message(f"✅ Reward role set to: {role.mention}", ephemeral=True)
+            await interaction.response.send_message(f"✅ Reward role set to: {role.mention}", ephemeral=False)
             await self.log_to_channel(interaction, "Set Reward Role", f"Role: {role.name} ({role.id})")
         else:
-            await interaction.response.send_message("❌ Failed to set reward role.", ephemeral=True)
+            await interaction.response.send_message("❌ Failed to set reward role.", ephemeral=False)
 
     @app_commands.command(name="reset_bot", description="⚠️ WIPE ALL DATA and reset bot to factory settings.")
     @app_commands.default_permissions(administrator=True)
     async def reset_bot(self, interaction: discord.Interaction):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
             return
         
         # Defer immediately to prevent interaction timeout
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
         
         await interaction.followup.send(
             "⚠️ **DANGER ZONE** ⚠️\n"
             "Are you sure you want to **DELETE ALL DATA** (Stats, Snapshots, Requirements, Linked Accounts)?\n"
             "This action cannot be undone.",
             view=ResetBotConfirmView(self),
-            ephemeral=True
+            ephemeral=False
         )
         await self.log_to_channel(interaction, "Command Used", "Command: /reset_bot")
 
@@ -1037,16 +1037,16 @@ class Admin(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def kvk_setup(self, interaction: discord.Interaction):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
             return
 
         # Defer immediately to prevent interaction timeout
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
 
         embed = discord.Embed(title="🧙‍♂️ KvK Setup Wizard", description="Welcome! Let's set up your new KvK season step-by-step.", color=discord.Color.blue())
         embed.add_field(name="Step 1", value="Select the KvK Season", inline=False)
         
-        await interaction.followup.send(embed=embed, view=WizardKvKSelectView(self), ephemeral=True)
+        await interaction.followup.send(embed=embed, view=WizardKvKSelectView(self), ephemeral=False)
         await self.log_to_channel(interaction, "Command Used", "Command: /kvk_setup")
 
 
@@ -1057,12 +1057,12 @@ class Admin(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def check_compliance(self, interaction: discord.Interaction):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
             return
 
         current_kvk = db_manager.get_current_kvk_name()
         if not current_kvk or current_kvk == "Not set":
-            await interaction.response.send_message("No KvK season is currently active.", ephemeral=True)
+            await interaction.response.send_message("No KvK season is currently active.", ephemeral=False)
             return
 
         await interaction.response.defer(ephemeral=False)
@@ -1158,7 +1158,7 @@ class Admin(commands.Cog):
         embed.description = admin_cmds + msg_cmds + player_cmds
         embed.set_footer(text="DKP Formula: T4×4 + T5×10 + Deaths×15")
         
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed, ephemeral=False)
 
     @app_commands.command(name="dkp_leaderboard", description="🏆 Show DKP leaderboard (T4×4 + T5×10 + Deaths×15).")
     async def dkp_leaderboard(self, interaction: discord.Interaction):
@@ -1166,13 +1166,13 @@ class Admin(commands.Cog):
         
         current_kvk = db_manager.get_current_kvk_name()
         if not current_kvk or current_kvk == "Not set":
-            await interaction.followup.send("❌ No active KvK season set.", ephemeral=True)
+            await interaction.followup.send("❌ No active KvK season set.", ephemeral=False)
             return
         
         # Get all calculated stats
         all_stats = db_manager.get_all_kvk_stats(current_kvk)
         if not all_stats:
-            await interaction.followup.send("❌ No player statistics available. Calculate periods first.", ephemeral=True)
+            await interaction.followup.send("❌ No player statistics available. Calculate periods first.", ephemeral=False)
             return
         
         # Calculate DKP for each player and sort

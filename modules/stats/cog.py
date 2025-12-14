@@ -36,17 +36,17 @@ class Stats(commands.Cog):
 
     @app_commands.command(name='link_account', description='Link your game account to your Discord.')
     async def link_account(self, interaction: discord.Interaction):
-        await interaction.response.send_message("Select account type to link:", view=LinkAccountView(self), ephemeral=True)
+        await interaction.response.send_message("Select account type to link:", view=LinkAccountView(self), ephemeral=False)
         await self.log_to_channel(interaction, "Command Used", "Command: /link_account")
 
     @app_commands.command(name='unlink_account', description='Unlink a game account.')
     async def unlink_account(self, interaction: discord.Interaction):
         accounts = db_manager.get_linked_accounts(interaction.user.id)
         if not accounts:
-            await interaction.response.send_message("You have no linked accounts.", ephemeral=True)
+            await interaction.response.send_message("You have no linked accounts.", ephemeral=False)
             return
 
-        await interaction.response.send_message("Select account to unlink:", view=UnlinkAccountView(accounts, self), ephemeral=True)
+        await interaction.response.send_message("Select account to unlink:", view=UnlinkAccountView(accounts, self), ephemeral=False)
         await self.log_to_channel(interaction, "Command Used", "Command: /unlink_account")
 
     @app_commands.command(name='my_stats', description='Show statistics for your linked accounts.')
@@ -59,9 +59,9 @@ class Stats(commands.Cog):
         if not accounts:
             msg = "Your Discord account is not linked to any game account. Use `/link_account` or the dashboard."
             if interaction.response.is_done():
-                await interaction.followup.send(msg, ephemeral=True)
+                await interaction.followup.send(msg, ephemeral=False)
             else:
-                await interaction.response.send_message(msg, ephemeral=True)
+                await interaction.response.send_message(msg, ephemeral=False)
             await self.log_to_channel(interaction, "Command Failed", "Command: /my_stats\nReason: No accounts linked")
             return
 
@@ -69,9 +69,9 @@ class Stats(commands.Cog):
         if not current_kvk_name:
             msg = "No active KvK is currently set. Please ask an administrator to set it."
             if interaction.response.is_done():
-                await interaction.followup.send(msg, ephemeral=True)
+                await interaction.followup.send(msg, ephemeral=False)
             else:
-                await interaction.response.send_message(msg, ephemeral=True)
+                await interaction.response.send_message(msg, ephemeral=False)
             await self.log_to_channel(interaction, "Command Failed", "Command: /my_stats\nReason: No active KvK")
             return
 
@@ -103,7 +103,7 @@ class Stats(commands.Cog):
         
         current_kvk_name = db_manager.get_current_kvk_name()
         if not current_kvk_name:
-            await interaction.followup.send("No active KvK is currently set.", ephemeral=True)
+            await interaction.followup.send("No active KvK is currently set.", ephemeral=False)
             return
         
         # Get periods to determine if we need selection UI
@@ -123,18 +123,18 @@ class Stats(commands.Cog):
         if not current_kvk_name:
             msg = "No active KvK is currently set."
             if interaction.response.is_done():
-                await interaction.followup.send(msg, ephemeral=True)
+                await interaction.followup.send(msg, ephemeral=False)
             else:
-                await interaction.response.send_message(msg, ephemeral=True)
+                await interaction.response.send_message(msg, ephemeral=False)
             return
 
         stats = db_manager.get_kingdom_stats_by_period(current_kvk_name, period_key)
         if not stats or not stats['player_count']:
             msg = f"No data found for KvK `{current_kvk_name}`."
             if interaction.response.is_done():
-                await interaction.followup.send(msg, ephemeral=True)
+                await interaction.followup.send(msg, ephemeral=False)
             else:
-                await interaction.response.send_message(msg, ephemeral=True)
+                await interaction.response.send_message(msg, ephemeral=False)
             return
 
         # Get period info for display
@@ -213,9 +213,9 @@ class Stats(commands.Cog):
 
         if not stats:
             if interaction.response.is_done():
-                await interaction.followup.send(f"No data found for account ID `{player_id}` in KvK `{kvk_name}`.", ephemeral=True)
+                await interaction.followup.send(f"No data found for account ID `{player_id}` in KvK `{kvk_name}`.", ephemeral=False)
             else:
-                await interaction.response.send_message(f"No data found for account ID `{player_id}` in KvK `{kvk_name}`.", ephemeral=True)
+                await interaction.response.send_message(f"No data found for account ID `{player_id}` in KvK `{kvk_name}`.", ephemeral=False)
             return
 
         requirements = db_manager.get_requirements(kvk_name, stats['total_power'])
@@ -281,9 +281,9 @@ class Stats(commands.Cog):
         
         if not all_stats:
              if interaction.response.is_done():
-                await interaction.followup.send("No data found for any linked accounts.", ephemeral=True)
+                await interaction.followup.send("No data found for any linked accounts.", ephemeral=False)
              else:
-                await interaction.response.send_message("No data found for any linked accounts.", ephemeral=True)
+                await interaction.response.send_message("No data found for any linked accounts.", ephemeral=False)
              return
         
         # Aggregate stats from all accounts
