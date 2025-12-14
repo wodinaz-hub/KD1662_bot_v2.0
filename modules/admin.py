@@ -527,6 +527,72 @@ class LinkedAccountsPaginationView(discord.ui.View):
         await interaction.response.edit_message(embed=self.create_embed(), view=self)
 
 
+
+class CompliancePaginationView(discord.ui.View):
+    def __init__(self, data, title, kvk_name):
+        super().__init__(timeout=180)
+        self.data = data
+        self.title = title
+        self.kvk_name = kvk_name
+        self.per_page = 8  # Fewer items per page due to more text
+        self.current_page = 0
+        self.total_pages = (len(data) - 1) // self.per_page + 1
+
+    def create_embed(self):
+        start = self.current_page * self.per_page
+        end = start + self.per_page
+        page_data = self.data[start:end]
+
+        embed = discord.Embed(
+            title=f"{self.title} - {self.kvk_name}",
+            description="✅ = Met | ❌ = Failed\nFormat: Current / Required",
+            color=discord.Color.blue()
+        )
+
+        for player in page_data:
+            status_icon = "✅" if player['compliant'] else "❌"
+            
+            # Format numbers (e.g. 1.5M)
+            def fmt(num):
+                if num >= 1_000_000_000: return f"{num/1_000_000_000:.1f}B"
+                if num >= 1_000_000: return f"{num/1_000_000:.1f}M"
+                if num >= 1_000: return f"{num/1_000:.1f}K"
+                return str(num)
+
+            kills_str = f"{fmt(player['kills'])} / {fmt(player['req_kills'])}"
+            deaths_str = f"{fmt(player['deaths'])} / {fmt(player['req_deaths'])}"
+            
+            field_name = f"{status_icon} {player['name']} ({fmt(player['power'])})"
+            field_value = f"⚔️ Kills: **{kills_str}**\n💀 Deaths: **{deaths_str}**"
+            
+            if not player['compliant']:
+                missing = []
+                if player['kills'] < player['req_kills']: missing.append("Kills")
+                if player['deaths'] < player['req_deaths']: missing.append("Deaths")
+                field_value += f"\n⚠️ Failed: {', '.join(missing)}"
+
+            embed.add_field(name=field_name, value=field_value, inline=False)
+
+        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} | Total: {len(self.data)}")
+        return embed
+
+    def update_buttons(self):
+        self.children[0].disabled = self.current_page == 0
+        self.children[1].disabled = self.current_page == self.total_pages - 1
+
+    @discord.ui.button(label="Previous", style=discord.ButtonStyle.primary, disabled=True)
+    async def previous_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page -= 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.create_embed(), view=self)
+
+    @discord.ui.button(label="Next", style=discord.ButtonStyle.primary)
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page += 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.create_embed(), view=self)
+
+
 # Cog for administrator commands
 class Admin(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -987,69 +1053,7 @@ class Admin(commands.Cog):
         await self.log_to_channel(interaction, "Command Used", "Command: /kvk_setup")
 
 
-class CompliancePaginationView(discord.ui.View):
-    def __init__(self, data, title, kvk_name):
-        super().__init__(timeout=180)
-        self.data = data
-        self.title = title
-        self.kvk_name = kvk_name
-        self.per_page = 8  # Fewer items per page due to more text
-        self.current_page = 0
-        self.total_pages = (len(data) - 1) // self.per_page + 1
 
-    def create_embed(self):
-        start = self.current_page * self.per_page
-        end = start + self.per_page
-        page_data = self.data[start:end]
-
-        embed = discord.Embed(
-            title=f"{self.title} - {self.kvk_name}",
-            description="✅ = Met | ❌ = Failed\nFormat: Current / Required",
-            color=discord.Color.blue()
-        )
-
-        for player in page_data:
-            status_icon = "✅" if player['compliant'] else "❌"
-            
-            # Format numbers (e.g. 1.5M)
-            def fmt(num):
-                if num >= 1_000_000_000: return f"{num/1_000_000_000:.1f}B"
-                if num >= 1_000_000: return f"{num/1_000_000:.1f}M"
-                if num >= 1_000: return f"{num/1_000:.1f}K"
-                return str(num)
-
-            kills_str = f"{fmt(player['kills'])} / {fmt(player['req_kills'])}"
-            deaths_str = f"{fmt(player['deaths'])} / {fmt(player['req_deaths'])}"
-            
-            field_name = f"{status_icon} {player['name']} ({fmt(player['power'])})"
-            field_value = f"⚔️ Kills: **{kills_str}**\n💀 Deaths: **{deaths_str}**"
-            
-            if not player['compliant']:
-                missing = []
-                if player['kills'] < player['req_kills']: missing.append("Kills")
-                if player['deaths'] < player['req_deaths']: missing.append("Deaths")
-                field_value += f"\n⚠️ Failed: {', '.join(missing)}"
-
-            embed.add_field(name=field_name, value=field_value, inline=False)
-
-        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} | Total: {len(self.data)}")
-        return embed
-
-    def update_buttons(self):
-        self.children[0].disabled = self.current_page == 0
-        self.children[1].disabled = self.current_page == self.total_pages - 1
-
-    @discord.ui.button(label="Previous", style=discord.ButtonStyle.primary, disabled=True)
-    async def previous_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page -= 1
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.create_embed(), view=self)
-
-    @discord.ui.button(label="Next", style=discord.ButtonStyle.primary)
-    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page += 1
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.create_embed(), view=self)
 
 
     @app_commands.command(name="check_compliance", description="Check which players met the requirements.")
