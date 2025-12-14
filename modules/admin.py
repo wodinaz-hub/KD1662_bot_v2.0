@@ -431,7 +431,7 @@ class LeaderboardPaginationView(discord.ui.View):
 
         embed = discord.Embed(
             title=f"{self.title} - {self.kvk_name}",
-            description="**Formula:** T4×4 + T5×10 + Deaths×15\n✅ = Met Requirements | ❌ = Failed",
+            description="**Formula:** T4×4 + T5×10 + Deaths×15",
             color=discord.Color.gold()
         )
 
@@ -439,10 +439,7 @@ class LeaderboardPaginationView(discord.ui.View):
         for i, player in enumerate(page_data, start + 1):
             medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
             
-            # Status icon
-            status_icon = "✅" if player.get('compliant', False) else "❌"
-            
-            leaderboard_text += f"{medal} **{player['player_name']}** {status_icon} — {player['dkp']:,} DKP\n"
+            leaderboard_text += f"{medal} **{player['player_name']}** — {player['dkp']:,} DKP\n"
             leaderboard_text += f"   T4: {player['t4']:,} | T5: {player['t5']:,} | Deaths: {player['deaths']:,}\n"
 
         if not leaderboard_text:
@@ -1187,23 +1184,13 @@ class Admin(commands.Cog):
             deaths = stat.get('total_deaths', 0) or 0
             dkp = (t4 * 4) + (t5 * 10) + (deaths * 15)
             
-            # Check compliance
-            reqs = db_manager.get_requirements(current_kvk, stat['total_power'])
-            compliant = False
-            if reqs:
-                total_kills = t4 + t5
-                kills_met = total_kills >= reqs['required_kills']
-                deaths_met = deaths >= reqs['required_deaths']
-                compliant = kills_met and deaths_met
-            
             player_dkp.append({
                 'player_id': stat['player_id'],
                 'player_name': stat['player_name'],
                 't4': t4,
                 't5': t5,
                 'deaths': deaths,
-                'dkp': dkp,
-                'compliant': compliant
+                'dkp': dkp
             })
         
         # Sort by DKP descending
