@@ -21,6 +21,23 @@ class Stats(commands.Cog):
         self.bot = bot
         db_manager.create_tables()
 
+    @commands.command(name='stats')
+    async def legacy_stats(self, ctx, player_id: str = None):
+        """Legacy command to guide users to the new slash commands."""
+        embed = discord.Embed(
+            title="⚠️ Legacy Command Detected",
+            description=(
+                "We have moved to a new system! The `!stats` command is no longer supported.\n\n"
+                "**How to use the new bot:**\n"
+                "1. Type `/` to see available commands.\n"
+                "2. Use `/start` to open the main dashboard.\n"
+                "3. Use `/my_stats` to see your personal stats.\n"
+                "4. Use `/link_account` to link your game account."
+            ),
+            color=discord.Color.orange()
+        )
+        await ctx.send(embed=embed)
+
     @app_commands.command(name='start', description='Open the main menu dashboard.')
     async def start(self, interaction: discord.Interaction):
         embed = discord.Embed(
