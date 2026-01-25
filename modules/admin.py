@@ -1007,6 +1007,55 @@ class Admin(commands.Cog):
             ephemeral=False
         )
         await self.log_to_channel(interaction, "Command Used", "Command: /finish_kvk")
+    
+    @app_commands.command(name="list_kvk_seasons", description="Show all KvK seasons with their dates and status.")
+    @app_commands.default_permissions(administrator=True)
+    async def list_kvk_seasons(self, interaction: discord.Interaction):
+        if not self.is_admin(interaction):
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
+            return
+        
+        seasons = db_manager.get_all_seasons()
+        if not seasons:
+            await interaction.response.send_message("No KvK seasons found in the database.", ephemeral=False)
+            return
+        
+        embed = discord.Embed(
+            title="📅 All KvK Seasons",
+            description="List of all available KvK seasons with their dates",
+            color=discord.Color.blue()
+        )
+        
+        current_kvk = db_manager.get_current_kvk_name()
+        
+        for s in seasons:
+            emoji = "🔥" if s.get('is_active') else "📁" if s.get('is_archived') else "⏸️"
+            status = "**ACTIVE**" if s.get('is_active') else "Archived" if s.get('is_archived') else "Inactive"
+            
+            value_text = f"Status: {emoji} {status}\n"
+            
+            if s.get('start_date') and s.get('end_date'):
+                value_text += f"📆 Period: {s['start_date']} → {s['end_date']}"
+            elif s.get('start_date'):
+                value_text += f"📆 Start: {s['start_date']}"
+            elif s.get('end_date'):
+                value_text += f"📆 End: {s['end_date']}"
+            else:
+                value_text += "📆 Dates: Not set"
+            
+            if current_kvk == s['value']:
+                value_text = "⭐ " + value_text
+                
+            embed.add_field(
+                name=f"{s['label']} (`{s['value']}`)",
+                value=value_text,
+                inline=False
+            )
+        
+        embed.set_footer(text=f"Total: {len(seasons)} seasons | Use /kingdom_stats season:<name> to view stats")
+        await interaction.response.send_message(embed=embed, ephemeral=False)
+        await self.log_to_channel(interaction, "Command Used", "Command: /list_kvk_seasons")
+
 
     # NOTE: Slash commands for file uploads (/upload_snapshot, /set_requirements) removed
     # due to Discord's 3-second interaction timeout issues with file attachments.
@@ -1334,6 +1383,8 @@ class Admin(commands.Cog):
         admin_cmds = (
             "🔧 **Admin Slash Commands:**\n"
             "`/set_kvk` - Select KvK season\n"
+            "`/list_kvk_seasons` - View all KvK seasons with dates\n"
+            "`/set_kvk_dates` - Set start/end dates for a season\n"
             "`/kvk_setup` - Interactive setup wizard\n"
             "`/status` - View current KvK status\n"
             "`/view_requirements` - Show requirements table\n"

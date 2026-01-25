@@ -78,11 +78,17 @@ class Stats(commands.Cog):
         choices = []
         for s in seasons:
             emoji = "📁" if s['is_archived'] else "⚔️"
-            name = s['label']
-            if s['is_archived'] and s['end_date']:
-                name += f" (Ended: {s['end_date']})"
+            name = f"{emoji} {s['label']}"
             
-            if current.lower() in name.lower():
+            # Show dates if available
+            if s.get('start_date') and s.get('end_date'):
+                name += f" ({s['start_date']} → {s['end_date']})"
+            elif s.get('start_date'):
+                name += f" (From: {s['start_date']})"
+            elif s.get('end_date'):
+                name += f" (Until: {s['end_date']})"
+            
+            if current.lower() in name.lower() or current.lower() in s['value'].lower():
                 choices.append(app_commands.Choice(name=name, value=s['value']))
         return choices[:25]
 
