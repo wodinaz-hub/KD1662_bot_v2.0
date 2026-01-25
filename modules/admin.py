@@ -323,19 +323,6 @@ class ResetBotConfirmView(discord.ui.View):
                 view=None
             )
             await self.admin_cog.log_to_channel(interaction, "RESET BOT", "All data wiped.")
-        else:
-            await interaction.response.edit_message(content="❌ Error wiping data. Check logs.", view=None)
-            await self.admin_cog.log_to_channel(interaction, "Reset Bot Failed", "Error wiping data.")
-        self.stop()
-
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.grey)
-    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(content="Reset cancelled.", view=None)
-        await self.admin_cog.log_to_channel(interaction, "Reset Bot Cancelled", "User cancelled the action.")
-        self.stop()
-
-
-# --- Wizard Classes ---
 
 class WizardConfirmationView(discord.ui.View):
     def __init__(self, kvk_name, reqs_count, admin_cog):
@@ -524,11 +511,18 @@ class LeaderboardPaginationView(discord.ui.View):
                 if n >= 1_000_000: return f"{n/1_000_000:.1f}M"
                 if n >= 1_000: return f"{n/1_000:.1f}K"
                 return str(n)
+            
+            # Truncate long names to prevent embed overflow
+            player_name = player['player_name']
+            if len(player_name) > 20:
+                player_name = player_name[:17] + "..."
 
-            leaderboard_text += f"{medal} **{player['player_name']}**\n"
-            leaderboard_text += f"   🏆 **{fmt(player['dkp'])} DKP** | ⚡ {fmt_short(player.get('power', 0))} Pwr\n"
-            leaderboard_text += f"   ⚔️ T4: {fmt_short(player['t4'])} | T5: {fmt_short(player['t5'])} | 💀 Deaths: {fmt_short(player['deaths'])}\n"
-            leaderboard_text += "   " + "─" * 25 + "\n"
+            leaderboard_text += f"{medal} **{player_name}**\n"
+            leaderboard_text += f"   🏆 **{fmt(player['dkp'])} DKP** | ⚡ {fmt_short(player.get('power', 0))}\n"
+            leaderboard_text += f"   ⚔️ T4: {fmt_short(player['t4'])} | T5: {fmt_short(player['t5'])} | 💀 {fmt_short(player['deaths'])}\n"
+            # Reduced separator to save space
+            if i < start + len(page_data):
+                leaderboard_text += "\n"
 
         if not leaderboard_text:
             leaderboard_text = "No data available"
@@ -740,6 +734,10 @@ class Admin(commands.Cog):
     @backup_loop.before_loop
     async def before_backup_loop(self):
         await self.bot.wait_until_ready()
+
+    async def create_backup_file(self):
+        """Creates a database backup and returns the path."""
+        return db_manager.backup_database()
 
     @app_commands.command(name="admin_backup", description="Create and download a database backup.")
     @app_commands.default_permissions(administrator=True)
@@ -1055,6 +1053,55 @@ class Admin(commands.Cog):
         embed.set_footer(text=f"Total: {len(seasons)} seasons | Use /kingdom_stats season:<name> to view stats")
         await interaction.response.send_message(embed=embed, ephemeral=False)
         await self.log_to_channel(interaction, "Command Used", "Command: /list_kvk_seasons")
+
+    @app_commands.command(name="delete_kvk_season", description="⚠️ Permanently delete an archived KvK season.")
+    @app_commands.describe(season="Select archived season to delete")
+    @app_commands.default_permissions(administrator=True)
+    async def delete_kvk_season(self, interaction: discord.Interaction, season: str):
+        if not self.is_admin(interaction):
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
+            return
+
+        # Check if it's archived
+        seasons = db_manager.get_all_seasons()
+        target = next((s for s in seasons if s['value'] == season), None)
+        
+        if not target:
+            await interaction.response.send_message(f"❌ Season `{season}` not found.", ephemeral=False)
+            return
+            
+        if not target.get('is_archived'):
+            await interaction.response.send_message(f"❌ Only archived seasons can be deleted. `{season}` is currently active or available.", ephemeral=False)
+            return
+
+        # Confirm action
+        await interaction.response.send_message(
+            f"⚠️ **DANGER: PERMANENT DELETION** ⚠️\n\n"
+            f"Are you sure you want to delete **{target['label']}** (`{season}`)?\n"
+            f"This will permanently remove ALL stats, snapshots, and requirements for this season.\n"
+            f"A backup will be created and sent to the logs channel before deletion.",
+            view=DeleteKvKConfirmView(interaction, season, self),
+            ephemeral=False
+        )
+        await self.log_to_channel(interaction, "Command Used", f"Command: /delete_kvk_season (Season: {season})")
+
+    @delete_kvk_season.autocomplete('season')
+    async def delete_kvk_season_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        """Autocomplete for delete_kvk_season - only show archived seasons"""
+        seasons = db_manager.get_all_seasons()
+        choices = []
+        for s in seasons:
+            if not s.get('is_archived'):
+                continue
+                
+            emoji = "📁"
+            name = f"{emoji} {s['label']}"
+            if s.get('start_date') and s.get('end_date'):
+                name += f" ({s['start_date']} → {s['end_date']})"
+            
+            if current.lower() in name.lower() or current.lower() in s['value'].lower():
+                choices.append(app_commands.Choice(name=name, value=s['value']))
+        return choices[:25]
 
 
     # NOTE: Slash commands for file uploads (/upload_snapshot, /set_requirements) removed

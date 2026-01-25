@@ -857,6 +857,72 @@ def get_all_seasons():
         if conn: conn.close()
 
 
+def delete_kvk_season(kvk_name: str) -> tuple[bool, str]:
+    """
+    Permanently deletes a KvK season and all associated data.
+    Returns (success: bool, message: str)
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        # Check if season exists
+        cursor.execute("SELECT * FROM kvk_seasons WHERE value = ?", (kvk_name,))
+        season = cursor.fetchone()
+        if not season:
+            return False, f"Season '{kvk_name}' not found"
+        
+        # Check if it's archived (safety check)
+        cursor.execute("SELECT is_archived FROM kvk_seasons WHERE value = ?", (kvk_name,))
+        result = cursor.fetchone()
+        if result and result[0] != 1:
+            return False, f"Can only delete archived seasons. '{kvk_name}' is not archived."
+        
+        # Begin transaction
+        cursor.execute("BEGIN IMMEDIATE TRANSACTION")
+        
+        # Delete from all tables
+        tables_to_clean = [
+            ('kvk_stats', 'kvk_name'),
+            ('kvk_snapshots', 'kvk_name'),
+            ('fort_stats', 'kvk_name'),
+            ('kvk_requirements', 'kvk_name'),
+            ('kingdom_players', 'kvk_name')
+        ]
+        
+        deleted_counts = {}
+        for table, column in tables_to_clean:
+            cursor.execute(f"DELETE FROM {table} WHERE {column} = ?", (kvk_name,))
+            deleted_counts[table] = cursor.rowcount
+        
+        # Delete season entry itself
+        cursor.execute("DELETE FROM kvk_seasons WHERE value = ?", (kvk_name,))
+        
+        conn.commit()
+        
+        # Build summary message
+        summary = f"Deleted season '{kvk_name}':\n"
+        summary += f"- {deleted_counts.get('kvk_stats', 0)} stat records\n"
+        summary += f"- {deleted_counts.get('kvk_snapshots', 0)} snapshot records\n"
+        summary += f"- {deleted_counts.get('fort_stats', 0)} fort stat records\n"
+        summary += f"- {deleted_counts.get('kvk_requirements', 0)} requirement records\n"
+        summary += f"- {deleted_counts.get('kingdom_players', 0)} player records"
+        
+        logger.info(f"Successfully deleted KvK season: {kvk_name}")
+        return True, summary
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Error deleting KvK season '{kvk_name}': {e}")
+        return False, f"Database error: {str(e)}"
+    finally:
+        if conn:
+            conn.close()
+
+
+
 def seed_seasons(default_options: list):
     """Populates the kvk_seasons table with defaults if empty."""
     conn = None

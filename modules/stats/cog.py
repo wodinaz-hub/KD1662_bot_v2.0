@@ -53,17 +53,17 @@ class Stats(commands.Cog):
 
     @app_commands.command(name='link_account', description='Link your game account to your Discord.')
     async def link_account(self, interaction: discord.Interaction):
-        await interaction.response.send_message("Select account type to link:", view=LinkAccountView(self), ephemeral=True)
+        await interaction.response.send_message("Select account type to link:", view=LinkAccountView(self), ephemeral=False)
         await self.log_to_channel(interaction, "Command Used", "Command: /link_account")
 
     @app_commands.command(name='unlink_account', description='Unlink a game account.')
     async def unlink_account(self, interaction: discord.Interaction):
         accounts = db_manager.get_linked_accounts(interaction.user.id)
         if not accounts:
-            await interaction.response.send_message("You have no linked accounts.", ephemeral=True)
+            await interaction.response.send_message("You have no linked accounts.", ephemeral=False)
             return
 
-        await interaction.response.send_message("Select account to unlink:", view=UnlinkAccountView(accounts, self), ephemeral=True)
+        await interaction.response.send_message("Select account to unlink:", view=UnlinkAccountView(accounts, self), ephemeral=False)
         await self.log_to_channel(interaction, "Command Used", "Command: /unlink_account")
 
     @app_commands.command(name='kingdom_stats', description='Show statistics for the whole kingdom.')
@@ -93,11 +93,33 @@ class Stats(commands.Cog):
         return choices[:25]
 
     @app_commands.command(name='my_stats', description='Show statistics for your linked accounts.')
-    async def my_stats(self, interaction: discord.Interaction):
+    @app_commands.describe(season="Optional: Select a specific season (current or archive)")
+    async def my_stats(self, interaction: discord.Interaction, season: str = None):
         await interaction.response.defer()
-        await self.my_stats_logic(interaction)
+        await self.my_stats_logic(interaction, season_override=season)
+    
+    @my_stats.autocomplete('season')
+    async def my_stats_season_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        """Autocomplete for season parameter - reuse the same logic as kingdom_stats"""
+        seasons = db_manager.get_all_seasons()
+        choices = []
+        for s in seasons:
+            emoji = "📁" if s.get('is_archived') else "⚔️"
+            name = f"{emoji} {s['label']}"
+            
+            # Show dates if available
+            if s.get('start_date') and s.get('end_date'):
+                name += f" ({s['start_date']} → {s['end_date']})"
+            elif s.get('start_date'):
+                name += f" (From: {s['start_date']})"
+            elif s.get('end_date'):
+                name += f" (Until: {s['end_date']})"
+            
+            if current.lower() in name.lower() or current.lower() in s['value'].lower():
+                choices.append(app_commands.Choice(name=name, value=s['value']))
+        return choices[:25]
 
-    async def my_stats_logic(self, interaction: discord.Interaction):
+    async def my_stats_logic(self, interaction: discord.Interaction, season_override: str = None):
         accounts = db_manager.get_linked_accounts(interaction.user.id)
         if not accounts:
             msg = "Your Discord account is not linked to any game account. Use `/link_account` or the dashboard."
@@ -108,8 +130,10 @@ class Stats(commands.Cog):
             await self.log_to_channel(interaction, "Command Failed", "Command: /my_stats\nReason: No accounts linked")
             return
 
-        current_kvk_name = db_manager.get_current_kvk_name()
-        if not current_kvk_name:
+        # Use season_override if provided, otherwise use current KvK
+        target_kvk = season_override if season_override else db_manager.get_current_kvk_name()
+        
+        if not target_kvk:
             msg = "No active KvK is currently set. Please ask an administrator to set it."
             if interaction.response.is_done():
                 await interaction.followup.send(msg, ephemeral=False)
@@ -119,18 +143,18 @@ class Stats(commands.Cog):
             return
 
         if len(accounts) == 1:
-            await self.show_player_stats(interaction, accounts[0]['player_id'], current_kvk_name)
+            await self.show_player_stats(interaction, accounts[0]['player_id'], target_kvk)
         else:
             # Get periods to determine which view to use
-            periods = db_manager.get_all_periods(current_kvk_name) or []
+            periods = db_manager.get_all_periods(target_kvk) or []
             unique_periods = list(set([p['period_key'] for p in periods])) if periods else []
             
             # Use PeriodSelectView if multiple periods exist, otherwise MyStatsView
             if len(unique_periods) > 1:
-                view = PeriodSelectView(accounts, current_kvk_name, periods, self)
+                view = PeriodSelectView(accounts, target_kvk, periods, self)
                 message = "Select period and account to view stats:"
             else:
-                view = MyStatsView(accounts, current_kvk_name, self)
+                view = MyStatsView(accounts, target_kvk, self)
                 message = "Select an account to view stats, or view Total:"
             
             if interaction.response.is_done():
@@ -314,51 +338,61 @@ class Stats(commands.Cog):
         add_stats_fields(embed, stats, requirements, earned_kp, power_change, rank)
         
         # --- History Comparison ---
-        # Find previous KvK
-        seasons = db_manager.get_all_seasons()
-        # Sort by value or something? Assuming they are ordered or we can find the one before current.
-        # Simple logic: find current index, take index-1.
-        prev_kvk = None
-        for i, s in enumerate(seasons):
-            if s['value'] == kvk_name and i > 0:
-                prev_kvk = seasons[i-1]['value']
-                break
+        current_active_kvk = db_manager.get_current_kvk_name()
         
-        if prev_kvk:
-            # Get stats from previous KvK (total period usually?)
-            # We don't have a "total" period key guaranteed, but usually it's the last one or we sum up?
-            # Or we look for a specific period?
-            # Let's assume we want to compare with the FINAL stats of previous KvK.
-            # If we don't know the period key, we might need a helper.
-            # For now, let's try to find a period that looks like "total" or just take the latest one?
-            # Or maybe we stored "total" as a period key?
-            # Let's try to get stats for "all" or similar if we implemented that.
-            # Actually, `get_player_stats_by_period` takes a period_key.
-            # If we want "total" for previous KvK, we need to know what the key was.
-            # Let's assume there is a period called "total" or we pick the last one.
-            prev_periods = db_manager.get_all_periods(prev_kvk)
-            if prev_periods:
-                # Use the last period (assuming it's the final result)
-                prev_period_key = prev_periods[-1]['period_key']
-                prev_stats = db_manager.get_player_stats_by_period(player_id, prev_kvk, prev_period_key)
+        # If viewing an archive season and there's an active season, compare with active
+        if kvk_name != current_active_kvk and current_active_kvk and current_active_kvk != "Not set":
+            current_stats_row = db_manager.get_player_stats_by_period(player_id, current_active_kvk, "all")
+            if current_stats_row:
+                current_stats = dict(current_stats_row)
                 
-                if prev_stats:
-                    # Calculate diffs
-                    # Compare current TOTAL power/kp vs previous TOTAL power/kp?
-                    # Or compare PERFORMANCE?
-                    # User said: "видеть динамику изминеий в сравннении с текущим квк"
-                    # Usually means: How much I improved since last KvK?
-                    # Delta Power = Current Power - Prev Power
-                    # Delta KP = Current KP - Prev KP
+                diff_power = current_stats['total_power'] - stats['total_power']
+                diff_kp = current_stats['total_kill_points'] - stats['total_kill_points']
+                
+                # Calculate percentages
+                def get_pct_str(diff, base):
+                    if base == 0: return "N/A"
+                    pct = (diff / base) * 100
+                    return f"{pct:+.1f}%"
+
+                power_pct = get_pct_str(diff_power, stats['total_power'])
+                kp_pct = get_pct_str(diff_kp, stats['total_kill_points'])
+
+                embed.add_field(
+                    name=f"🆚 Comparison with Current ({current_active_kvk})",
+                    value=(
+                        f"**Power:** {diff_power:+,.0f} ({power_pct})\n"
+                        f"**KP:** {diff_kp:+,.0f} ({kp_pct})"
+                    ),
+                    inline=False
+                )
+        
+        # Also keep the "vs Previous" logic if viewing current season
+        elif kvk_name == current_active_kvk:
+            seasons = db_manager.get_all_seasons()
+            prev_kvk = None
+            for i, s in enumerate(seasons):
+                if s['value'] == kvk_name and i > 0:
+                    prev_kvk = seasons[i-1]['value']
+                    break
+            
+            if prev_kvk:
+                prev_periods = db_manager.get_all_periods(prev_kvk)
+                if prev_periods:
+                    prev_period_key = prev_periods[-1]['period_key']
+                    prev_stats_row = db_manager.get_player_stats_by_period(player_id, prev_kvk, prev_period_key)
                     
-                    diff_power = stats['total_power'] - prev_stats['total_power']
-                    diff_kp = stats['total_kill_points'] - prev_stats['total_kill_points']
-                    
-                    embed.add_field(
-                        name=f"🆚 vs {prev_kvk}",
-                        value=f"Power: {diff_power:+,.0f}\nKP: {diff_kp:+,.0f}",
-                        inline=False
-                    )
+                    if prev_stats_row:
+                        prev_stats = dict(prev_stats_row)
+                        diff_power = stats['total_power'] - prev_stats['total_power']
+                        diff_kp = stats['total_kill_points'] - prev_stats['total_kill_points']
+                        
+                        embed.add_field(
+                            name=f"🆚 vs Previous ({prev_kvk})",
+                            value=f"Power: {diff_power:+,.0f}\nKP: {diff_kp:+,.0f}",
+                            inline=False
+                        )
+
 
         file = None
         if requirements:

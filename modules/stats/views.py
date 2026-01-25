@@ -24,7 +24,7 @@ class LinkAccountModal(discord.ui.Modal, title="Link Account"):
         try:
             p_id = int(self.player_id.value)
         except ValueError:
-            await interaction.response.send_message("❌ Player ID must be a number.", ephemeral=True)
+            await interaction.response.send_message("❌ Player ID must be a number.", ephemeral=False)
             return
 
         discord_id = interaction.user.id
@@ -32,11 +32,11 @@ class LinkAccountModal(discord.ui.Modal, title="Link Account"):
 
         if success:
             await interaction.response.send_message(
-                f"✅ Game ID `{p_id}` successfully linked as **{self.account_type.capitalize()}**.", ephemeral=True)
+                f"✅ Game ID `{p_id}` successfully linked as **{self.account_type.capitalize()}**.", ephemeral=False)
             await self.stats_cog.log_to_channel(interaction, "Link Account", f"ID: {p_id}\nType: {self.account_type}")
         else:
             await interaction.response.send_message(
-                "❌ An error occurred while linking the account. Please try again.", ephemeral=True)
+                "❌ An error occurred while linking the account. Please try again.", ephemeral=False)
             await self.stats_cog.log_to_channel(interaction, "Link Account Failed", f"ID: {p_id}\nType: {self.account_type}")
 
 
@@ -250,7 +250,7 @@ class StartView(discord.ui.View):
 
     @discord.ui.button(label="Link Account", style=discord.ButtonStyle.primary, emoji="🔗")
     async def link_account(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("Select account type to link:", view=LinkAccountView(self.stats_cog), ephemeral=True)
+        await interaction.response.send_message("Select account type to link:", view=LinkAccountView(self.stats_cog), ephemeral=False)
 
     @discord.ui.button(label="My Stats", style=discord.ButtonStyle.success, emoji="📊")
     async def my_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -268,4 +268,4 @@ class StartView(discord.ui.View):
         embed.add_field(name="🔗 Link Account", value="Connect your game account to view stats.", inline=False)
         embed.add_field(name="📊 My Stats", value="Check your personal performance.", inline=False)
         embed.add_field(name="🏰 Kingdom Stats", value="View global kingdom statistics.", inline=False)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed, ephemeral=False)

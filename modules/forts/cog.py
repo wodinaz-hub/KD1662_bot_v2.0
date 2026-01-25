@@ -47,7 +47,7 @@ class Forts(commands.Cog):
         # Get linked account
         accounts = db_manager.get_linked_accounts(interaction.user.id)
         if not accounts:
-            await interaction.followup.send("You have no linked accounts. Use `/link_account` first.", ephemeral=True)
+            await interaction.followup.send("You have no linked accounts. Use `/link_account` first.", ephemeral=False)
             return
 
         # Use main account by default or let user choose? For now, main or first.
