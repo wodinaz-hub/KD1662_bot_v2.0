@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 import os
 import logging
@@ -30,6 +30,9 @@ KVK_OPTIONS = [
     {"label": "Song of Troy", "value": "song_of_troy", "description": "Song of Troy KvK"}
 ]
 
+# Seed DB with defaults if empty
+db_manager.seed_seasons(KVK_OPTIONS)
+
 class KvKSelectView(discord.ui.View):
     def __init__(self, original_interaction, admin_cog):
         super().__init__(timeout=60)
@@ -37,10 +40,29 @@ class KvKSelectView(discord.ui.View):
         self.admin_cog = admin_cog
         
         # Create the select menu
-        options = [
-            discord.SelectOption(label=opt["label"], value=opt["value"], description=opt.get("description"))
-            for opt in KVK_OPTIONS
-        ]
+        # Get options from DB instead of hardcoded list
+        db_options = db_manager.get_all_seasons()
+        
+        options = []
+        for opt in db_options:
+            # Add emoji for archived/active
+            emoji = "📁" if opt['is_archived'] else "⚔️"
+            label = f"{emoji} {opt['label']}"
+            if opt['is_archived'] and opt['end_date']:
+                label += f" (Ended: {opt['end_date']})"
+                
+            options.append(discord.SelectOption(
+                label=label, 
+                value=opt["value"], 
+                description=opt.get("description")
+            ))
+            
+        # Fallback if DB is empty (shouldn't happen due to seeding)
+        if not options:
+            options = [
+                discord.SelectOption(label=opt["label"], value=opt["value"], description=opt.get("description"))
+                for opt in KVK_OPTIONS
+            ]
         
         # Split options if > 25 (Discord limit), but here we have < 25
         select = discord.ui.Select(placeholder="Choose a KvK Season...", options=options)
@@ -147,7 +169,10 @@ class RequirementsModal(discord.ui.Modal, title="Set KvK Requirements"):
         current_kvk = db_manager.get_current_kvk_name()
         if db_manager.save_requirements_batch(current_kvk, parsed_reqs):
             await interaction.response.send_message(f"✅ Successfully saved {len(parsed_reqs)} requirement brackets for **{current_kvk}**.", ephemeral=False)
+            await interaction.response.send_message(f"✅ Successfully saved {len(parsed_reqs)} requirement brackets for **{current_kvk}**.", ephemeral=False)
             await self.admin_cog.log_to_channel(interaction, "Set Requirements (Text)", f"KvK: {current_kvk}\nBrackets: {len(parsed_reqs)}")
+            # Update timestamp
+            db_manager.set_last_updated(current_kvk)
         else:
             await interaction.response.send_message("❌ Database error while saving requirements.", ephemeral=False)
 
@@ -393,6 +418,60 @@ class WizardRequirementsView(discord.ui.View):
         
         await interaction.response.edit_message(embed=embed, view=WizardConfirmationView(self.kvk_name, 0, self.admin_cog))
 
+class DeletePlayerConfirmView(discord.ui.View):
+    def __init__(self, player_id, admin_cog):
+        super().__init__(timeout=60)
+        self.player_id = player_id
+        self.admin_cog = admin_cog
+
+    @discord.ui.button(label="Yes, Delete Player", style=discord.ButtonStyle.red)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if db_manager.delete_player(self.player_id):
+            await interaction.response.edit_message(content=f"✅ Player `{self.player_id}` has been deleted from the database.", view=None)
+            await self.admin_cog.log_to_channel(interaction, "Delete Player", f"Deleted ID: {self.player_id}")
+        else:
+            await interaction.response.edit_message(content="❌ Failed to delete player. Check logs.", view=None)
+        self.stop()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.grey)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="Deletion cancelled.", view=None)
+        self.stop()
+
+
+class GlobalRequirementsModal(discord.ui.Modal, title="Set Global Stats Requirements"):
+    requirements_text = discord.ui.TextInput(
+        label="Paste Requirements Text",
+        style=discord.TextStyle.paragraph,
+        placeholder="100M - 150M Power\n100M Kills / 1M deads\n...",
+        required=True,
+        max_length=2000
+    )
+
+    def __init__(self, admin_cog):
+        super().__init__()
+        self.admin_cog = admin_cog
+
+    async def on_submit(self, interaction: discord.Interaction):
+        text = self.requirements_text.value
+        # Reuse parsing logic from RequirementsModal
+        dummy_modal = RequirementsModal(self.admin_cog)
+        parsed_reqs = dummy_modal.parse_requirements(text)
+        
+        if not parsed_reqs:
+            await interaction.response.send_message("❌ Could not parse requirements.", ephemeral=True)
+            return
+
+        import json
+        reqs_json = json.dumps(parsed_reqs)
+        
+        if db_manager.set_global_requirements(reqs_json):
+            await interaction.response.send_message(f"✅ Global requirements updated ({len(parsed_reqs)} brackets).", ephemeral=False)
+            await self.admin_cog.log_to_channel(interaction, "Set Global Requirements", f"Brackets: {len(parsed_reqs)}")
+        else:
+            await interaction.response.send_message("❌ Database error.", ephemeral=True)
+
+
 class WizardKvKSelectView(discord.ui.View):
     def __init__(self, admin_cog):
         super().__init__(timeout=120)
@@ -437,10 +516,19 @@ class LeaderboardPaginationView(discord.ui.View):
 
         leaderboard_text = ""
         for i, player in enumerate(page_data, start + 1):
-            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
+            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"**{i}.**"
             
-            leaderboard_text += f"{medal} **{player['player_name']}** — {player['dkp']:,} DKP\n"
-            leaderboard_text += f"   T4: {player['t4']:,} | T5: {player['t5']:,} | Deaths: {player['deaths']:,}\n"
+            # Format numbers
+            def fmt(n): return f"{n:,}"
+            def fmt_short(n):
+                if n >= 1_000_000: return f"{n/1_000_000:.1f}M"
+                if n >= 1_000: return f"{n/1_000:.1f}K"
+                return str(n)
+
+            leaderboard_text += f"{medal} **{player['player_name']}**\n"
+            leaderboard_text += f"   🏆 **{fmt(player['dkp'])} DKP** | ⚡ {fmt_short(player.get('power', 0))} Pwr\n"
+            leaderboard_text += f"   ⚔️ T4: {fmt_short(player['t4'])} | T5: {fmt_short(player['t5'])} | 💀 Deaths: {fmt_short(player['deaths'])}\n"
+            leaderboard_text += "   " + "─" * 25 + "\n"
 
         if not leaderboard_text:
             leaderboard_text = "No data available"
@@ -619,6 +707,67 @@ class Admin(commands.Cog):
         else:
             logger.error("ADMIN_ROLE_IDS not set in .env file.")
 
+        # Start background tasks
+        self.backup_loop.start()
+
+    def cog_unload(self):
+        self.backup_loop.cancel()
+
+    @tasks.loop(hours=24)
+    async def backup_loop(self):
+        """Background task to backup database every 24 hours."""
+        log_channel_id = int(os.getenv('LOG_CHANNEL_ID', 0))
+        if log_channel_id == 0:
+            return
+
+        channel = self.bot.get_channel(log_channel_id)
+        if not channel:
+            return
+
+        backup_path = db_manager.backup_database()
+        if backup_path:
+            try:
+                file = discord.File(backup_path)
+                await channel.send(f"📦 **Daily Database Backup**", file=file)
+                # Clean up backup file after sending
+                try:
+                    os.remove(backup_path)
+                except:
+                    pass
+            except Exception as e:
+                logger.error(f"Failed to send auto-backup: {e}")
+    
+    @backup_loop.before_loop
+    async def before_backup_loop(self):
+        await self.bot.wait_until_ready()
+
+    @app_commands.command(name="admin_backup", description="Create and download a database backup.")
+    @app_commands.default_permissions(administrator=True)
+    async def admin_backup(self, interaction: discord.Interaction):
+        if not self.is_admin(interaction):
+            await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
+            return
+
+        await interaction.response.defer(ephemeral=False)
+        
+        backup_path = db_manager.backup_database()
+        if backup_path:
+            try:
+                file = discord.File(backup_path)
+                await interaction.followup.send("📦 **Database Backup Created**", file=file)
+                await self.log_to_channel(interaction, "Backup Created", "Manual backup via /admin_backup")
+                
+                # Clean up
+                try:
+                    os.remove(backup_path)
+                except:
+                    pass
+            except Exception as e:
+                await interaction.followup.send(f"❌ Failed to upload backup: {e}")
+                logger.error(f"Failed to send manual backup: {e}")
+        else:
+            await interaction.followup.send("❌ Failed to create backup file.")
+
     # Admin role check function
     def is_admin(self, interaction: discord.Interaction):
         if not self.admin_role_ids:
@@ -712,9 +861,74 @@ class Admin(commands.Cog):
         if not self.is_admin(interaction):
             await interaction.response.send_message("You do not have permissions to use this command.", ephemeral=False)
             return
+            
+        await interaction.response.send_message("Select the active KvK season:", view=KvKSelectView(interaction, self), ephemeral=True)
+        await self.log_to_channel(interaction, "Command Used", "Command: /set_kvk")
+
+    @app_commands.command(name="set_kvk_dates", description="Set start and end dates for a KvK season.")
+    @app_commands.describe(kvk_name="The KvK season name (e.g. kvk1)", start_date="YYYY-MM-DD", end_date="YYYY-MM-DD")
+    @app_commands.default_permissions(administrator=True)
+    async def set_kvk_dates(self, interaction: discord.Interaction, kvk_name: str, start_date: str, end_date: str):
+        if not self.is_admin(interaction):
+            await interaction.response.send_message("You do not have permissions.", ephemeral=True)
+            return
+
+        # Validate dates
+        try:
+            from datetime import datetime
+            datetime.strptime(start_date, "%Y-%m-%d")
+            datetime.strptime(end_date, "%Y-%m-%d")
+        except ValueError:
+            await interaction.response.send_message("❌ Invalid date format. Use YYYY-MM-DD.", ephemeral=True)
+            return
+
+        if db_manager.set_kvk_dates(kvk_name, start_date, end_date):
+            await interaction.response.send_message(f"✅ Dates for **{kvk_name}** updated: {start_date} to {end_date}.", ephemeral=False)
+            await self.log_to_channel(interaction, "Set KvK Dates", f"KvK: {kvk_name}\nStart: {start_date}\nEnd: {end_date}")
+        else:
+            await interaction.response.send_message(f"❌ Failed to set dates. Ensure KvK '{kvk_name}' exists.", ephemeral=True)
+
+    @app_commands.command(name="admin_cleanup_players", description="View and delete player data.")
+    @app_commands.describe(player_id="The player ID to delete (optional, if not provided, shows instructions)")
+    @app_commands.default_permissions(administrator=True)
+    async def admin_cleanup_players(self, interaction: discord.Interaction, player_id: str = None):
+        if not self.is_admin(interaction):
+            await interaction.response.send_message("You do not have permissions.", ephemeral=True)
+            return
+
+        if not player_id:
+            await interaction.response.send_message(
+                "ℹ️ **Player Cleanup Tool**\n"
+                "Use `/admin_cleanup_players player_id:12345` to delete a specific player.\n"
+                "⚠️ **WARNING**: This will delete ALL data for that player (stats, snapshots, links, fort stats) permanently.",
+                ephemeral=True
+            )
+            return
+
+        try:
+            pid = int(player_id)
+        except ValueError:
+            await interaction.response.send_message("❌ Invalid Player ID.", ephemeral=True)
+            return
+
+        # Confirm deletion
+        view = DeletePlayerConfirmView(pid, self)
+        await interaction.response.send_message(f"⚠️ Are you sure you want to delete ALL data for player ID `{pid}`?", view=view, ephemeral=True)
+
+    @app_commands.command(name="set_global_requirements", description="Set global requirements for 'Total Stats' view.")
+    @app_commands.default_permissions(administrator=True)
+    async def set_global_requirements(self, interaction: discord.Interaction):
+        if not self.is_admin(interaction):
+            await interaction.response.send_message("You do not have permissions.", ephemeral=True)
+            return
+
+        await interaction.response.send_modal(GlobalRequirementsModal(self))
+
 
         # Check the list of options before creating the View
-        if not KVK_OPTIONS:
+        # We now check DB options
+        seasons = db_manager.get_all_seasons()
+        if not seasons and not KVK_OPTIONS:
             logger.error("KVK_OPTIONS list is empty. Cannot create a select menu.")
             await interaction.response.send_message(
                 "Sorry, the list of available KvK is empty. Please contact the developer.",
@@ -1161,18 +1375,23 @@ class Admin(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=False)
 
     @app_commands.command(name="dkp_leaderboard", description="🏆 Show DKP leaderboard (T4×4 + T5×10 + Deaths×15).")
-    async def dkp_leaderboard(self, interaction: discord.Interaction):
+    @app_commands.describe(season="Optional: Select a specific season (Active or Archived)")
+    async def dkp_leaderboard(self, interaction: discord.Interaction, season: str = None):
         await interaction.response.defer()
         
-        current_kvk = db_manager.get_current_kvk_name()
-        if not current_kvk or current_kvk == "Not set":
+        # Use selected season or default to current
+        target_kvk = season
+        if not target_kvk:
+            target_kvk = db_manager.get_current_kvk_name()
+            
+        if not target_kvk or target_kvk == "Not set":
             await interaction.followup.send("❌ No active KvK season set.", ephemeral=False)
             return
         
         # Get all calculated stats
-        all_stats = db_manager.get_all_kvk_stats(current_kvk)
+        all_stats = db_manager.get_all_kvk_stats(target_kvk)
         if not all_stats:
-            await interaction.followup.send("❌ No player statistics available. Calculate periods first.", ephemeral=False)
+            await interaction.followup.send(f"❌ No player statistics available for **{target_kvk}**.", ephemeral=False)
             return
         
         # Calculate DKP for each player and sort
@@ -1187,6 +1406,7 @@ class Admin(commands.Cog):
             player_dkp.append({
                 'player_id': stat['player_id'],
                 'player_name': stat['player_name'],
+                'power': stat.get('total_power', 0),
                 't4': t4,
                 't5': t5,
                 'deaths': deaths,
@@ -1196,9 +1416,26 @@ class Admin(commands.Cog):
         # Sort by DKP descending
         player_dkp.sort(key=lambda x: x['dkp'], reverse=True)
         
-        view = LeaderboardPaginationView(player_dkp, "🏆 DKP Leaderboard", current_kvk)
+        view = LeaderboardPaginationView(player_dkp, "🏆 DKP Leaderboard", target_kvk)
         view.update_buttons()
         await interaction.followup.send(embed=view.create_embed(), view=view)
+
+    @dkp_leaderboard.autocomplete('season')
+    async def season_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        seasons = db_manager.get_all_seasons()
+        choices = []
+        for s in seasons:
+            # Format: "📁 KvK 1 (Ended: ...)" or "⚔️ KvK 2"
+            emoji = "📁" if s['is_archived'] else "⚔️"
+            name = s['label']
+            if s['is_archived'] and s['end_date']:
+                name += f" (Ended: {s['end_date']})"
+            
+            if current.lower() in name.lower():
+                choices.append(app_commands.Choice(name=name, value=s['value']))
+        
+        # Limit to 25 choices (Discord limit)
+        return choices[:25]
 
     # ===== MESSAGE-BASED COMMANDS FOR FILE UPLOADS =====
     # These are more reliable than slash commands for file uploads

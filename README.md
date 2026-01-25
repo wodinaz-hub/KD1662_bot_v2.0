@@ -11,13 +11,14 @@ Discord bot for managing Kingdom vs Kingdom (KvK) statistics and rankings for Ri
 - 📋 **Requirements Management**: Set and track kill/death requirements by power tier
 - 📸 **Snapshot System**: Import start/end snapshots for period-based statistics
 - 🎯 **Kingdom Stats**: Aggregated kingdom-wide statistics and rankings
+- 🏰 **Fort Statistics**: Track fort participation (joined/launched) with auto-scanning and manual upload
 - 🔐 **Role-based Admin**: Secure admin commands with role verification
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.10+
 - Discord Bot Token ([Get one here](https://discord.com/developers/applications))
 - Discord Server with Administrator permissions
 
@@ -60,6 +61,19 @@ LOG_CHANNEL_ID=channel_id_for_logs
 ### Database
 
 The bot uses SQLite database stored in `data/kvk_data.db`. It's created automatically on first run.
+ 
+ ### Deployment & Backups (Railway/Docker)
+ 
+ **Important for Railway/Render Users:**
+ To ensure your database persists across deployments (restarts), you **MUST** use a Volume.
+ 
+ 1. **Add a Volume** in Railway service settings.
+ 2. Mount the volume to a path, e.g., `/app/data`.
+ 3. Set the environment variable `DATA_PATH=/app/data` in Railway.
+ 
+ **Backup Features:**
+ - **Automatic Backups**: The bot sends a backup of the database to the `LOG_CHANNEL_ID` every 24 hours.
+ - **Manual Backup**: Use `/admin_backup` to download the database immediately.
 
 ## 🎮 Commands
 
@@ -70,6 +84,7 @@ The bot uses SQLite database stored in `data/kvk_data.db`. It's created automati
 - `/unlink_account` - Unlink a game account
 - `/my_stats` - View your statistics (main, alt, farm, or combined)
 - `/kingdom_stats` - View kingdom-wide statistics
+- `/fort_stats` - View your fort participation statistics
 
 ### Admin Commands
 
@@ -82,6 +97,9 @@ The bot uses SQLite database stored in `data/kvk_data.db`. It's created automati
 - `/dkp_leaderboard` - Display DKP rankings
 - `/export_leaderboard` - Export leaderboard to Excel
 - `/check_compliance` - Check player compliance with requirements
+- `/admin_backup` - Download a backup of the database
+- `/fort_downloads` - Scan channel history for fort stats files
+- `!fort_upload` - (Prefix command) Upload fort stats file manually
 
 ## 📁 Project Structure
 
@@ -92,6 +110,8 @@ KD1662_bot_v2.0/
 │   └── database_manager.py # Database operations
 ├── modules/
 │   ├── admin.py           # Admin commands
+│   ├── forts/             # Fort stats module
+│   │   └── cog.py         # Fort commands
 │   └── stats/             # Stats module
 │       ├── cog.py         # Stats commands
 │       ├── views.py       # UI components
@@ -120,6 +140,7 @@ KD1662_bot_v2.0/
 - `linked_accounts` - Discord-to-game account mappings
 - `kvk_settings` - Bot configuration
 - `admin_logs` - Admin action logging
+- `fort_stats` - Fort participation data
 
 ## 📊 Excel File Formats
 
@@ -148,6 +169,14 @@ Required columns:
 - Required Kills (T4+T5)
 - Required Deaths
 
+### Fort Stats Upload
+
+Required columns:
+- Governor ID (or ID)
+- Governor Name (or Name)
+- Joined (or Participated)
+- Launched (or Captain/Leader)
+
 ## 🤝 Contributing
 
 1. Fork the repository
@@ -174,6 +203,13 @@ For issues and questions:
 - Contact the maintainer
 
 ## 🔄 Changelog
+
+### v2.2.0 (2026-01-25)
+- 🏰 **Fort Stats Module**: Added comprehensive fort tracking.
+- 📥 **Smart Import**: `!fort_upload` and `/fort_downloads` with 7-day history scan.
+- 🔄 **KvK Independence**: Fort stats now work without an active KvK season.
+- 🛠️ **Database Refactor**: Implemented context managers for better reliability.
+- ⚡ **Performance**: Optimized file parsing and database transactions.
 
 ### v2.1.0 (2025-12-12)
 - ✨ Added database indexes for 10-100x performance improvement

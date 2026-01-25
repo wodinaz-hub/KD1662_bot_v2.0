@@ -66,6 +66,26 @@ class Stats(commands.Cog):
         await interaction.response.send_message("Select account to unlink:", view=UnlinkAccountView(accounts, self), ephemeral=True)
         await self.log_to_channel(interaction, "Command Used", "Command: /unlink_account")
 
+    @app_commands.command(name='kingdom_stats', description='Show statistics for the whole kingdom.')
+    @app_commands.describe(season="Optional: Select a specific season")
+    async def kingdom_stats(self, interaction: discord.Interaction, season: str = None):
+        await interaction.response.defer()
+        await self.kingdom_stats_logic(interaction, kvk_name=season)
+
+    @kingdom_stats.autocomplete('season')
+    async def season_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        seasons = db_manager.get_all_seasons()
+        choices = []
+        for s in seasons:
+            emoji = "📁" if s['is_archived'] else "⚔️"
+            name = s['label']
+            if s['is_archived'] and s['end_date']:
+                name += f" (Ended: {s['end_date']})"
+            
+            if current.lower() in name.lower():
+                choices.append(app_commands.Choice(name=name, value=s['value']))
+        return choices[:25]
+
     @app_commands.command(name='my_stats', description='Show statistics for your linked accounts.')
     async def my_stats(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -111,33 +131,12 @@ class Stats(commands.Cog):
                 await interaction.followup.send(message, view=view)
             else:
                 await interaction.response.send_message(message, view=view)
-        
-        await self.log_to_channel(interaction, "Command Used", "Command: /my_stats")
 
-    @app_commands.command(name='kingdom_stats', description='Show aggregated statistics for the entire kingdom.')
-    async def kingdom_stats(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        
-        current_kvk_name = db_manager.get_current_kvk_name()
-        if not current_kvk_name:
-            await interaction.followup.send("No active KvK is currently set.", ephemeral=False)
-            return
-        
-        # Get periods to determine if we need selection UI
-        periods = db_manager.get_all_periods(current_kvk_name) or []
-        unique_periods = list(set([p['period_key'] for p in periods])) if periods else []
-        
-        # Show dropdown if multiple periods exist
-        if len(unique_periods) > 1:
-            from .views import KingdomPeriodSelectView
-            view = KingdomPeriodSelectView(current_kvk_name, periods, self)
-            await interaction.followup.send("Select period to view kingdom stats:", view=view)
-        else:
-            await self.kingdom_stats_logic(interaction)
-
-    async def kingdom_stats_logic(self, interaction: discord.Interaction, period_key: str = "all"):
-        current_kvk_name = db_manager.get_current_kvk_name()
-        if not current_kvk_name:
+    async def kingdom_stats_logic(self, interaction: discord.Interaction, period_key: str = "all", kvk_name: str = None):
+        if not kvk_name:
+            kvk_name = db_manager.get_current_kvk_name()
+            
+        if not kvk_name:
             msg = "No active KvK is currently set."
             if interaction.response.is_done():
                 await interaction.followup.send(msg, ephemeral=False)
@@ -145,9 +144,9 @@ class Stats(commands.Cog):
                 await interaction.response.send_message(msg, ephemeral=False)
             return
 
-        stats = db_manager.get_kingdom_stats_by_period(current_kvk_name, period_key)
+        stats = db_manager.get_kingdom_stats_by_period(kvk_name, period_key)
         if not stats or not stats['player_count']:
-            msg = f"No data found for KvK `{current_kvk_name}`."
+            msg = f"No data found for KvK `{kvk_name}`."
             if interaction.response.is_done():
                 await interaction.followup.send(msg, ephemeral=False)
             else:
@@ -156,7 +155,7 @@ class Stats(commands.Cog):
 
         # Get period info for display
         from .helpers import format_period_label
-        periods = db_manager.get_all_periods(current_kvk_name) or []
+        periods = db_manager.get_all_periods(kvk_name) or []
         period_label = format_period_label(period_key, periods)
         
         # Calculate changes (power, KP, deaths) from start snapshot
@@ -167,10 +166,10 @@ class Stats(commands.Cog):
         # Get start snapshot for comparison
         if period_key == "all":
             # For all periods, use KvK-wide start snapshot
-            start_snapshot = db_manager.get_kingdom_start_snapshot(current_kvk_name)
+            start_snapshot = db_manager.get_kingdom_start_snapshot(kvk_name)
         else:
             # For specific period, get start snapshot of that period
-            start_data = db_manager.get_snapshot_data(current_kvk_name, period_key, 'start')
+            start_data = db_manager.get_snapshot_data(kvk_name, period_key, 'start')
             if start_data:
                 # Aggregate start snapshot
                 start_power = sum(p['power'] for p in start_data.values())
@@ -190,7 +189,7 @@ class Stats(commands.Cog):
             earned_deaths = stats['kingdom_deaths'] - (start_snapshot.get('kingdom_deaths') or 0)
         
         embed = discord.Embed(
-            title=f"🏰 Kingdom Stats: {current_kvk_name}",
+            title=f"🏰 Kingdom Stats: {kvk_name}",
             description=f"{period_label}",
             color=discord.Color.gold()
         )
@@ -217,6 +216,40 @@ class Stats(commands.Cog):
         
         embed.add_field(name="🎖️ T4 Kills", value=f"{stats['kingdom_t4_kills']:,}", inline=True)
         embed.add_field(name="👑 T5 Kills", value=f"{stats['kingdom_t5_kills']:,}", inline=True)
+
+        # --- History Comparison ---
+        # Find previous KvK
+        seasons = db_manager.get_all_seasons()
+        prev_kvk = None
+        for i, s in enumerate(seasons):
+            if s['value'] == kvk_name and i > 0:
+                prev_kvk = seasons[i-1]['value']
+                break
+        
+        if prev_kvk:
+            # Get stats from previous KvK (total period usually?)
+            # Use "all" period for previous KvK
+            prev_stats = db_manager.get_kingdom_stats_by_period(prev_kvk, "all")
+            
+            if prev_stats and prev_stats['player_count'] > 0:
+                diff_power = stats['kingdom_power'] - prev_stats['kingdom_power']
+                diff_kp = stats['kingdom_kill_points'] - prev_stats['kingdom_kill_points']
+                diff_deaths = stats['kingdom_deaths'] - prev_stats['kingdom_deaths']
+                
+                embed.add_field(
+                    name=f"🆚 vs {prev_kvk}",
+                    value=f"Power: {diff_power:+,.0f}\nKP: {diff_kp:+,.0f}\nDeaths: {diff_deaths:+,.0f}",
+                    inline=False
+                )
+
+        # Add Last Updated footer
+        last_updated = db_manager.get_last_updated(kvk_name, period_key)
+        footer_text = ""
+        if last_updated:
+            footer_text = f"🕒 Data updated: {last_updated}"
+        
+        if footer_text:
+            embed.set_footer(text=footer_text)
 
         if interaction.response.is_done():
             await interaction.followup.send(embed=embed)
@@ -264,8 +297,63 @@ class Stats(commands.Cog):
             color=discord.Color.blue()
         )
         
+        # Add Last Updated footer
+        last_updated = db_manager.get_last_updated(kvk_name, period_key)
+        footer_text = ""
+        if last_updated:
+            footer_text = f"🕒 Data updated: {last_updated}"
+        
+        embed.set_footer(text=footer_text)
+        
         add_stats_fields(embed, stats, requirements, earned_kp, power_change, rank)
         
+        # --- History Comparison ---
+        # Find previous KvK
+        seasons = db_manager.get_all_seasons()
+        # Sort by value or something? Assuming they are ordered or we can find the one before current.
+        # Simple logic: find current index, take index-1.
+        prev_kvk = None
+        for i, s in enumerate(seasons):
+            if s['value'] == kvk_name and i > 0:
+                prev_kvk = seasons[i-1]['value']
+                break
+        
+        if prev_kvk:
+            # Get stats from previous KvK (total period usually?)
+            # We don't have a "total" period key guaranteed, but usually it's the last one or we sum up?
+            # Or we look for a specific period?
+            # Let's assume we want to compare with the FINAL stats of previous KvK.
+            # If we don't know the period key, we might need a helper.
+            # For now, let's try to find a period that looks like "total" or just take the latest one?
+            # Or maybe we stored "total" as a period key?
+            # Let's try to get stats for "all" or similar if we implemented that.
+            # Actually, `get_player_stats_by_period` takes a period_key.
+            # If we want "total" for previous KvK, we need to know what the key was.
+            # Let's assume there is a period called "total" or we pick the last one.
+            prev_periods = db_manager.get_all_periods(prev_kvk)
+            if prev_periods:
+                # Use the last period (assuming it's the final result)
+                prev_period_key = prev_periods[-1]['period_key']
+                prev_stats = db_manager.get_player_stats_by_period(player_id, prev_kvk, prev_period_key)
+                
+                if prev_stats:
+                    # Calculate diffs
+                    # Compare current TOTAL power/kp vs previous TOTAL power/kp?
+                    # Or compare PERFORMANCE?
+                    # User said: "видеть динамику изминеий в сравннении с текущим квк"
+                    # Usually means: How much I improved since last KvK?
+                    # Delta Power = Current Power - Prev Power
+                    # Delta KP = Current KP - Prev KP
+                    
+                    diff_power = stats['total_power'] - prev_stats['total_power']
+                    diff_kp = stats['total_kill_points'] - prev_stats['total_kill_points']
+                    
+                    embed.add_field(
+                        name=f"🆚 vs {prev_kvk}",
+                        value=f"Power: {diff_power:+,.0f}\nKP: {diff_kp:+,.0f}",
+                        inline=False
+                    )
+
         file = None
         if requirements:
             t4 = stats.get('total_t4_kills', 0) or 0
@@ -337,7 +425,33 @@ class Stats(commands.Cog):
             color=discord.Color.purple()
         )
         
-        requirements = db_manager.get_requirements(kvk_name, total_stats['total_power'])
+        # Add Last Updated footer
+        last_updated = db_manager.get_last_updated(kvk_name, "general")
+        if last_updated:
+            embed.set_footer(text=f"🕒 Data updated: {last_updated}")
+        
+        # Try to get global requirements first
+        import json
+        global_reqs_json = db_manager.get_global_requirements()
+        requirements = None
+        
+        if global_reqs_json:
+            try:
+                global_reqs = json.loads(global_reqs_json)
+                # Find matching bracket
+                power = total_stats['total_power']
+                for req in global_reqs:
+                    if req['min_power'] <= power <= req['max_power']:
+                        requirements = req
+                        break
+            except Exception as e:
+                logger.error(f"Error parsing global requirements: {e}")
+        
+        # Fallback to KvK requirements if no global found (or maybe we shouldn't? User said "change requirements for this general statistics")
+        # If global reqs are set, use them. If not, maybe use KvK reqs?
+        if not requirements:
+             requirements = db_manager.get_requirements(kvk_name, total_stats['total_power'])
+
         add_stats_fields(embed, total_stats, requirements, earned_kp_total, power_change_total, rank=None)
 
         if interaction.response.is_done():

@@ -2,14 +2,41 @@ import sqlite3
 import os
 import logging
 import pandas as pd
+from contextlib import closing
 
 # Logging configuration
 logger = logging.getLogger('db_manager')
 
 # Define database path
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
+# Allow overriding data directory via environment variable (useful for Railway Volumes)
+DATA_DIR = os.getenv('DATA_PATH', os.path.join(PROJECT_ROOT, 'data'))
 DATABASE_PATH = os.path.join(DATA_DIR, 'kvk_data.db')
+
+def backup_database():
+    """
+    Creates a backup of the database file.
+    Returns the path to the backup file or None if failed.
+    """
+    import shutil
+    from datetime import datetime
+    
+    try:
+        if not os.path.exists(DATABASE_PATH):
+            logger.error("Database file not found for backup.")
+            return None
+            
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"kvk_data_backup_{timestamp}.db"
+        backup_path = os.path.join(DATA_DIR, backup_filename)
+        
+        # Create a copy
+        shutil.copy2(DATABASE_PATH, backup_path)
+        logger.info(f"Database backup created at {backup_path}")
+        return backup_path
+    except Exception as e:
+        logger.error(f"Error creating database backup: {e}")
+        return None
 
 
 def create_tables():
@@ -140,6 +167,42 @@ def create_tables():
             )
         ''')
 
+        # Table for KvK Seasons (Dynamic List)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS kvk_seasons (
+                value TEXT PRIMARY KEY,
+                label TEXT NOT NULL,
+                description TEXT,
+                start_date TEXT,
+                end_date TEXT,
+                is_active INTEGER DEFAULT 0,
+                is_archived INTEGER DEFAULT 0
+            )
+        ''')
+
+        # Table for fort statistics
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS fort_stats (
+                player_id INTEGER,
+                player_name TEXT NOT NULL,
+                forts_joined INTEGER DEFAULT 0,
+                forts_launched INTEGER DEFAULT 0,
+                total_forts INTEGER DEFAULT 0,
+                penalties INTEGER DEFAULT 0,
+                kvk_name TEXT NOT NULL,
+                period_key TEXT NOT NULL,
+                PRIMARY KEY (player_id, kvk_name, period_key)
+            )
+        ''')
+
+        # Table for global settings (e.g. global stats requirements)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS global_settings (
+                setting_key TEXT PRIMARY KEY,
+                setting_value TEXT NOT NULL
+            )
+        ''')
+
         # Create indexes for performance optimization
         logger.info("Creating database indexes...")
         
@@ -184,6 +247,12 @@ def create_tables():
             CREATE INDEX IF NOT EXISTS idx_requirements_kvk 
             ON kvk_requirements(kvk_name)
         ''')
+
+        # Index for fort stats
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_fort_stats_kvk 
+            ON fort_stats(kvk_name, period_key)
+        ''')
         
         conn.commit()
         logger.info("Database tables and indexes successfully created or verified.")
@@ -200,7 +269,6 @@ def import_kingdom_players(file_path: str, kvk_name: str):
     This is used for account linking and determining DKP requirements based on initial power.
     Expected columns: Governor ID, Governor Name, Power
     """
-    conn = None
     try:
         df = pd.read_excel(file_path)
         # Normalize column names
@@ -226,73 +294,62 @@ def import_kingdom_players(file_path: str, kvk_name: str):
             logger.error(f"Found columns: {list(df.columns)}")
             return False, 0
         
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        # Clear old players for this KvK (replace with new list)
-        cursor.execute("DELETE FROM kingdom_players WHERE kvk_name = ?", (kvk_name,))
-        
-        imported = 0
-        for index, row in df.iterrows():
-            try:
-                player_id = int(row[found_cols['player_id']])
-                player_name = str(row[found_cols['player_name']])
-                power = int(row[found_cols['power']])
+        with closing(sqlite3.connect(DATABASE_PATH)) as conn:
+            with conn:
+                cursor = conn.cursor()
                 
-                cursor.execute('''
-                    INSERT OR REPLACE INTO kingdom_players (player_id, player_name, power, kvk_name)
-                    VALUES (?, ?, ?, ?)
-                ''', (player_id, player_name, power, kvk_name))
-                imported += 1
-            except Exception as e:
-                logger.error(f"Error in player row {index + 2}: {e}")
-                continue
-        
-        conn.commit()
-        logger.info(f"Imported {imported} kingdom players for '{kvk_name}'.")
-        return True, imported
+                # Clear old players for this KvK (replace with new list)
+                cursor.execute("DELETE FROM kingdom_players WHERE kvk_name = ?", (kvk_name,))
+                
+                imported = 0
+                for index, row in df.iterrows():
+                    try:
+                        player_id = int(row[found_cols['player_id']])
+                        player_name = str(row[found_cols['player_name']])
+                        power = int(row[found_cols['power']])
+                        
+                        cursor.execute('''
+                            INSERT OR REPLACE INTO kingdom_players (player_id, player_name, power, kvk_name)
+                            VALUES (?, ?, ?, ?)
+                        ''', (player_id, player_name, power, kvk_name))
+                        imported += 1
+                    except Exception as e:
+                        logger.error(f"Error in player row {index + 2}: {e}")
+                        continue
+                
+                logger.info(f"Imported {imported} kingdom players for '{kvk_name}'.")
+                return True, imported
     except Exception as e:
         logger.error(f"Error importing kingdom players: {e}")
         return False, 0
-    finally:
-        if conn:
-            conn.close()
 
 
 def get_kingdom_player(player_id: int, kvk_name: str):
     """Gets a player from the kingdom players list."""
-    conn = None
     try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT * FROM kingdom_players WHERE player_id = ? AND kvk_name = ?", (player_id, kvk_name))
-        return cursor.fetchone()
+        with closing(sqlite3.connect(DATABASE_PATH)) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT * FROM kingdom_players WHERE player_id = ? AND kvk_name = ?", (player_id, kvk_name))
+            return cursor.fetchone()
     except Exception as e:
         logger.error(f"Error getting kingdom player: {e}")
         return None
-    finally:
-        if conn:
-            conn.close()
 
 
 def get_all_kingdom_players(kvk_name: str):
     """Gets all players in the kingdom for this KvK."""
-    conn = None
     try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT * FROM kingdom_players WHERE kvk_name = ? ORDER BY power DESC", (kvk_name,))
-        return cursor.fetchall()
+        with closing(sqlite3.connect(DATABASE_PATH)) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT * FROM kingdom_players WHERE kvk_name = ? ORDER BY power DESC", (kvk_name,))
+            return cursor.fetchall()
     except Exception as e:
         logger.error(f"Error getting kingdom players: {e}")
         return []
-    finally:
-        if conn:
-            conn.close()
 
 
 def import_snapshot(file_path: str, kvk_name: str, period_key: str, snapshot_type: str):
@@ -300,7 +357,6 @@ def import_snapshot(file_path: str, kvk_name: str, period_key: str, snapshot_typ
     Imports a snapshot (Start/End) from Excel into the kvk_snapshots table.
     Supports flexible column names.
     """
-    conn = None
     try:
         df = pd.read_excel(file_path)
         # Normalize column names
@@ -335,60 +391,57 @@ def import_snapshot(file_path: str, kvk_name: str, period_key: str, snapshot_typ
             logger.error(f"Found columns: {list(df.columns)}")
             return False
 
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
+        with closing(sqlite3.connect(DATABASE_PATH)) as conn:
+            with conn:
+                cursor = conn.cursor()
 
-        # Check for existing data and warn about overwriting
-        cursor.execute("SELECT COUNT(*) FROM kvk_snapshots WHERE kvk_name = ? AND period_key = ? AND snapshot_type = ?",
-                       (kvk_name, period_key, snapshot_type))
-        existing_count = cursor.fetchone()[0]
-        if existing_count > 0:
-            logger.warning(f"Overwriting {existing_count} existing snapshot records for {kvk_name}/{period_key}/{snapshot_type}")
+                # Check for existing data and warn about overwriting
+                cursor.execute("SELECT COUNT(*) FROM kvk_snapshots WHERE kvk_name = ? AND period_key = ? AND snapshot_type = ?",
+                               (kvk_name, period_key, snapshot_type))
+                existing_count = cursor.fetchone()[0]
+                if existing_count > 0:
+                    logger.warning(f"Overwriting {existing_count} existing snapshot records for {kvk_name}/{period_key}/{snapshot_type}")
 
-        # Clear old snapshot of the same type for this period if overwriting is needed
-        cursor.execute("DELETE FROM kvk_snapshots WHERE kvk_name = ? AND period_key = ? AND snapshot_type = ?",
-                       (kvk_name, period_key, snapshot_type))
+                # Clear old snapshot of the same type for this period if overwriting is needed
+                cursor.execute("DELETE FROM kvk_snapshots WHERE kvk_name = ? AND period_key = ? AND snapshot_type = ?",
+                               (kvk_name, period_key, snapshot_type))
 
-        imported = 0
-        for index, row in df.iterrows():
-            try:
-                player_id = int(row[found_cols['player_id']])
-                player_name = str(row[found_cols['player_name']])
-                power = int(row[found_cols['power']])
-                kill_points = int(row[found_cols['kill_points']])
-                deaths = int(row[found_cols['deaths']])
-                
-                # Tier kills are optional (default to 0)
-                t1 = int(row.get(found_cols.get('t1_kills', ''), 0) or 0)
-                t2 = int(row.get(found_cols.get('t2_kills', ''), 0) or 0)
-                t3 = int(row.get(found_cols.get('t3_kills', ''), 0) or 0)
-                t4 = int(row.get(found_cols.get('t4_kills', ''), 0) or 0)
-                t5 = int(row.get(found_cols.get('t5_kills', ''), 0) or 0)
-                
-                cursor.execute('''
-                    INSERT INTO kvk_snapshots (
-                        player_id, player_name, power, kill_points, deaths,
-                        t1_kills, t2_kills, t3_kills, t4_kills, t5_kills,
-                        kvk_name, period_key, snapshot_type
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    player_id, player_name, power, kill_points, deaths,
-                    t1, t2, t3, t4, t5, kvk_name, period_key, snapshot_type
-                ))
-                imported += 1
-            except Exception as e:
-                logger.error(f"Error processing row {index + 2}: {e}")
-                continue
+                imported = 0
+                for index, row in df.iterrows():
+                    try:
+                        player_id = int(row[found_cols['player_id']])
+                        player_name = str(row[found_cols['player_name']])
+                        power = int(row[found_cols['power']])
+                        kill_points = int(row[found_cols['kill_points']])
+                        deaths = int(row[found_cols['deaths']])
+                        
+                        # Tier kills are optional (default to 0)
+                        t1 = int(row.get(found_cols.get('t1_kills', ''), 0) or 0)
+                        t2 = int(row.get(found_cols.get('t2_kills', ''), 0) or 0)
+                        t3 = int(row.get(found_cols.get('t3_kills', ''), 0) or 0)
+                        t4 = int(row.get(found_cols.get('t4_kills', ''), 0) or 0)
+                        t5 = int(row.get(found_cols.get('t5_kills', ''), 0) or 0)
+                        
+                        cursor.execute('''
+                            INSERT INTO kvk_snapshots (
+                                player_id, player_name, power, kill_points, deaths,
+                                t1_kills, t2_kills, t3_kills, t4_kills, t5_kills,
+                                kvk_name, period_key, snapshot_type
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            player_id, player_name, power, kill_points, deaths,
+                            t1, t2, t3, t4, t5, kvk_name, period_key, snapshot_type
+                        ))
+                        imported += 1
+                    except Exception as e:
+                        logger.error(f"Error processing row {index + 2}: {e}")
+                        continue
 
-        conn.commit()
-        logger.info(f"Snapshot '{snapshot_type}' for '{kvk_name}' - '{period_key}': imported {imported} players.")
-        return True
+                logger.info(f"Snapshot '{snapshot_type}' for '{kvk_name}' - '{period_key}': imported {imported} players.")
+                return True
     except Exception as e:
         logger.error(f"Error importing snapshot: {e}")
         return False
-    finally:
-        if conn:
-            conn.close()
 
 
 def import_requirements(file_path: str, kvk_name: str):
@@ -396,7 +449,6 @@ def import_requirements(file_path: str, kvk_name: str):
     Imports KvK requirements from Excel.
     Supports multiple column name variations for flexibility.
     """
-    conn = None
     try:
         df = pd.read_excel(file_path)
         # Normalize column names (remove spaces, lower case, remove underscores) for flexibility
@@ -434,58 +486,52 @@ def import_requirements(file_path: str, kvk_name: str):
                         f"required_deaths ({col_variations['required_deaths']})")
             return False
 
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
+        with closing(sqlite3.connect(DATABASE_PATH)) as conn:
+            with conn:
+                cursor = conn.cursor()
 
-        # Clear old requirements for this KvK
-        cursor.execute("DELETE FROM kvk_requirements WHERE kvk_name = ?", (kvk_name,))
+                # Clear old requirements for this KvK
+                cursor.execute("DELETE FROM kvk_requirements WHERE kvk_name = ?", (kvk_name,))
 
-        rows_imported = 0
-        for index, row in df.iterrows():
-            try:
-                min_power = int(row[found_columns['min_power']])
-                max_power = int(row[found_columns['max_power']])
-                required_kills = int(row[found_columns['required_kills']])
-                required_deaths = int(row[found_columns['required_deaths']])
-                
-                cursor.execute('''
-                    INSERT INTO kvk_requirements (
-                        kvk_name, min_power, max_power, required_kills, required_deaths
-                    ) VALUES (?, ?, ?, ?, ?)
-                ''', (kvk_name, min_power, max_power, required_kills, required_deaths))
-                rows_imported += 1
-            except Exception as e:
-                logger.error(f"Error in requirement row {index + 2}: {e}")
-                continue
+                rows_imported = 0
+                for index, row in df.iterrows():
+                    try:
+                        min_power = int(row[found_columns['min_power']])
+                        max_power = int(row[found_columns['max_power']])
+                        required_kills = int(row[found_columns['required_kills']])
+                        required_deaths = int(row[found_columns['required_deaths']])
+                        
+                        cursor.execute('''
+                            INSERT INTO kvk_requirements (
+                                kvk_name, min_power, max_power, required_kills, required_deaths
+                            ) VALUES (?, ?, ?, ?, ?)
+                        ''', (kvk_name, min_power, max_power, required_kills, required_deaths))
+                        rows_imported += 1
+                    except Exception as e:
+                        logger.error(f"Error in requirement row {index + 2}: {e}")
+                        continue
 
-        conn.commit()
-        logger.info(f"Requirements for '{kvk_name}' successfully imported. {rows_imported} rows.")
-        return True
+                logger.info(f"Requirements for '{kvk_name}' successfully imported. {rows_imported} rows.")
+                return True
     except Exception as e:
         logger.error(f"Error importing requirements: {e}")
         return False
-    finally:
-        if conn:
-            conn.close()
 
 
 def get_snapshot_data(kvk_name: str, period_key: str, snapshot_type: str):
     """Retrieves snapshot data as a dictionary {player_id: row}."""
-    conn = None
     try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT * FROM kvk_snapshots WHERE kvk_name = ? AND period_key = ? AND snapshot_type = ?",
-                       (kvk_name, period_key, snapshot_type))
-        rows = cursor.fetchall()
-        return {row['player_id']: row for row in rows}
+        with closing(sqlite3.connect(DATABASE_PATH)) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT * FROM kvk_snapshots WHERE kvk_name = ? AND period_key = ? AND snapshot_type = ?",
+                           (kvk_name, period_key, snapshot_type))
+            rows = cursor.fetchall()
+            return {row['player_id']: row for row in rows}
     except Exception as e:
         logger.error(f"Error retrieving snapshot: {e}")
         return {}
-    finally:
-        if conn: conn.close()
 
 
 def save_period_results(results: list):
@@ -496,41 +542,30 @@ def save_period_results(results: list):
     if not results:
         return True
         
-    conn = None
     try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        # Begin explicit transaction
-        cursor.execute("BEGIN IMMEDIATE TRANSACTION")
-        
-        for res in results:
-            cursor.execute('''
-                INSERT OR REPLACE INTO kvk_stats (
-                    player_id, player_name, power, kill_points, deaths,
-                    t1_kills, t2_kills, t3_kills, t4_kills, t5_kills,
-                    kvk_name, period_key
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                res['player_id'], res['player_name'], res['power'],
-                res['kill_points'], res['deaths'], res['t1_kills'],
-                res['t2_kills'], res['t3_kills'], res['t4_kills'],
-                res['t5_kills'], res['kvk_name'], res['period_key']
-            ))
-        
-        # Commit transaction
-        conn.commit()
-        logger.info(f"Saved {len(results)} period results successfully.")
-        return True
+        with closing(sqlite3.connect(DATABASE_PATH)) as conn:
+            with conn:
+                cursor = conn.cursor()
+                
+                for res in results:
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO kvk_stats (
+                            player_id, player_name, power, kill_points, deaths,
+                            t1_kills, t2_kills, t3_kills, t4_kills, t5_kills,
+                            kvk_name, period_key
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        res['player_id'], res['player_name'], res['power'],
+                        res['kill_points'], res['deaths'], res['t1_kills'],
+                        res['t2_kills'], res['t3_kills'], res['t4_kills'],
+                        res['t5_kills'], res['kvk_name'], res['period_key']
+                    ))
+                
+                logger.info(f"Saved {len(results)} period results successfully.")
+                return True
     except Exception as e:
         logger.error(f"Error saving results: {e}")
-        if conn:
-            conn.rollback()
-            logger.info("Transaction rolled back due to error.")
         return False
-    finally:
-        if conn:
-            conn.close()
 
 
 def get_requirements(kvk_name: str, power: int):
@@ -610,10 +645,139 @@ def save_requirements_batch(kvk_name: str, requirements: list):
         if conn: conn.close()
 
 
+def set_kvk_dates(kvk_name: str, start_date: str, end_date: str):
+    """Sets the start and end dates for a KvK season."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE kvk_seasons 
+            SET start_date = ?, end_date = ?
+            WHERE value = ?
+        ''', (start_date, end_date, kvk_name))
+        
+        if cursor.rowcount == 0:
+            # If not found, maybe insert? No, seasons should exist.
+            logger.warning(f"Attempted to set dates for unknown KvK: {kvk_name}")
+            return False
+            
+        conn.commit()
+        return True
+    except Exception as e:
+        logger.error(f"Error setting KvK dates: {e}")
+        return False
+    finally:
+        if conn: conn.close()
+
+
+def get_global_requirements():
+    """Returns the global requirements setting as a JSON string or None."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT setting_value FROM global_settings WHERE setting_key = 'global_requirements'")
+        res = cursor.fetchone()
+        return res[0] if res else None
+    except Exception as e:
+        logger.error(f"Error getting global requirements: {e}")
+        return None
+    finally:
+        if conn: conn.close()
+
+
+def set_global_requirements(requirements_json: str):
+    """Saves the global requirements setting."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT OR REPLACE INTO global_settings (setting_key, setting_value)
+            VALUES ('global_requirements', ?)
+        ''', (requirements_json,))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        logger.error(f"Error setting global requirements: {e}")
+        return False
+    finally:
+        if conn: conn.close()
+
+
+def import_fort_stats(stats_list: list):
+    """
+    Imports fort statistics.
+    stats_list: list of dicts {player_id, player_name, forts_joined, forts_launched, total_forts, penalties, kvk_name, period_key}
+    """
+    try:
+        with closing(sqlite3.connect(DATABASE_PATH)) as conn:
+            with conn:
+                cursor = conn.cursor()
+                
+                for stat in stats_list:
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO fort_stats (
+                            player_id, player_name, forts_joined, forts_launched, 
+                            total_forts, penalties, kvk_name, period_key
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        stat['player_id'], stat['player_name'], stat['forts_joined'],
+                        stat['forts_launched'], stat['total_forts'], stat['penalties'],
+                        stat['kvk_name'], stat['period_key']
+                    ))
+                
+                return True
+    except Exception as e:
+        logger.error(f"Error importing fort stats: {e}")
+        return False
+
+
+def get_fort_stats(player_id: int, kvk_name: str):
+    """Gets fort stats for a player in a KvK."""
+    try:
+        with closing(sqlite3.connect(DATABASE_PATH)) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT * FROM fort_stats 
+                WHERE player_id = ? AND kvk_name = ?
+            ''', (player_id, kvk_name))
+            
+            return cursor.fetchone()
+    except Exception as e:
+        logger.error(f"Error getting fort stats: {e}")
+        return None
+
+
+def delete_player(player_id: int):
+    """Deletes all data associated with a player ID."""
+    try:
+        with closing(sqlite3.connect(DATABASE_PATH)) as conn:
+            with conn:
+                cursor = conn.cursor()
+                
+                tables = ['kvk_stats', 'kvk_snapshots', 'kingdom_players', 'linked_accounts', 'fort_stats']
+                for table in tables:
+                    cursor.execute(f"DELETE FROM {table} WHERE player_id = ?", (player_id,))
+                    
+                logger.info(f"Deleted player {player_id} from all tables.")
+                return True
+    except Exception as e:
+        logger.error(f"Error deleting player {player_id}: {e}")
+        return False
+
+
 def archive_kvk_data(current_name: str, archive_name: str):
     """
     Archives KvK data by renaming it in the stats and snapshots tables.
-    Uses transaction to ensure atomic operation.
+    Also updates the kvk_seasons table to mark it as archived.
     """
     conn = None
     try:
@@ -628,11 +792,27 @@ def archive_kvk_data(current_name: str, archive_name: str):
         
         # Update kvk_snapshots
         cursor.execute("UPDATE kvk_snapshots SET kvk_name = ? WHERE kvk_name = ?", (archive_name, current_name))
+        
+        # Update fort_stats
+        cursor.execute("UPDATE fort_stats SET kvk_name = ? WHERE kvk_name = ?", (archive_name, current_name))
+
+        # Update kvk_seasons: Mark old as archived, create new entry for archive name
+        from datetime import datetime
+        end_date = datetime.now().strftime("%Y-%m-%d")
+        
+        # 1. Update the season entry to show it's archived
+        # We create a NEW entry for the archived version so we can keep the original "template" available if needed,
+        # OR we just update the existing one. 
+        # User wants "past kvk saved with name and date".
+        # Let's insert a new record for the archived version.
+        
+        cursor.execute('''
+            INSERT INTO kvk_seasons (value, label, description, end_date, is_active, is_archived)
+            VALUES (?, ?, ?, ?, 0, 1)
+        ''', (archive_name, archive_name, f"Archived on {end_date}", end_date))
 
         # Requirements are left as a template (not renamed) so they can be used again.
-        # Or should we copy them for the archive?
-        # User asked for "data archive". Requirements are settings.
-        # Let's copy requirements to the archive name to know what they were THEN.
+        # But we copy them for the archive so the archive has its own copy.
         
         # 1. Get current requirements
         cursor.execute("SELECT * FROM kvk_requirements WHERE kvk_name = ?", (current_name,))
@@ -643,7 +823,7 @@ def archive_kvk_data(current_name: str, archive_name: str):
             cursor.execute('''
                 INSERT INTO kvk_requirements (kvk_name, min_power, max_power, required_kills, required_deaths)
                 VALUES (?, ?, ?, ?, ?)
-            ''', (archive_name, req[1], req[2], req[3], req[4])) # Indices depend on column order in SELECT *
+            ''', (archive_name, req[1], req[2], req[3], req[4])) 
 
         # Commit transaction
         conn.commit()
@@ -655,6 +835,93 @@ def archive_kvk_data(current_name: str, archive_name: str):
             conn.rollback()
             logger.info("Transaction rolled back due to error.")
         return False
+    finally:
+        if conn: conn.close()
+
+
+def get_all_seasons():
+    """Returns all available KvK seasons (active, available, and archived)."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM kvk_seasons ORDER BY is_archived ASC, value ASC")
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    except Exception as e:
+        logger.error(f"Error getting seasons: {e}")
+        return []
+    finally:
+        if conn: conn.close()
+
+
+def seed_seasons(default_options: list):
+    """Populates the kvk_seasons table with defaults if empty."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT COUNT(*) FROM kvk_seasons")
+        if cursor.fetchone()[0] == 0:
+            logger.info("Seeding kvk_seasons table with defaults...")
+            for opt in default_options:
+                cursor.execute('''
+                    INSERT INTO kvk_seasons (value, label, description)
+                    VALUES (?, ?, ?)
+                ''', (opt['value'], opt['label'], opt.get('description', '')))
+            conn.commit()
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Error seeding seasons: {e}")
+        return False
+    finally:
+        if conn: conn.close()
+
+
+def set_last_updated(kvk_name: str, period_key: str = "general"):
+    """Sets the last updated timestamp for a KvK period."""
+    from datetime import datetime
+    conn = None
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        key = f"last_updated_{kvk_name}_{period_key}"
+        
+        cursor.execute('''
+            INSERT OR REPLACE INTO kvk_settings (setting_key, setting_value)
+            VALUES (?, ?)
+        ''', (key, timestamp))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        logger.error(f"Error setting last updated: {e}")
+        return False
+    finally:
+        if conn: conn.close()
+
+
+def get_last_updated(kvk_name: str, period_key: str = "general"):
+    """Gets the last updated timestamp."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        key = f"last_updated_{kvk_name}_{period_key}"
+        cursor.execute("SELECT setting_value FROM kvk_settings WHERE setting_key = ?", (key,))
+        res = cursor.fetchone()
+        
+        return res[0] if res else None
+    except Exception as e:
+        logger.error(f"Error getting last updated: {e}")
+        return None
     finally:
         if conn: conn.close()
 
