@@ -195,6 +195,17 @@ def create_tables():
             )
         ''')
 
+        # Table for fort periods
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS fort_periods (
+                kvk_name TEXT NOT NULL,
+                period_key TEXT NOT NULL,
+                period_label TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (kvk_name, period_key)
+            )
+        ''')
+
         # Table for global settings (e.g. global stats requirements)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS global_settings (
@@ -710,16 +721,31 @@ def set_global_requirements(requirements_json: str):
         if conn: conn.close()
 
 
-def import_fort_stats(stats_list: list):
+def import_fort_stats(stats_list: list, period_label: str = "Total"):
     """
-    Imports fort statistics.
-    stats_list: list of dicts {player_id, player_name, forts_joined, forts_launched, total_forts, penalties, kvk_name, period_key}
+    Imports fort statistics for a specific period.
+    stats_list: list of dicts {player_id, player_name, forts_joined, forts_launched, total_forts, penalties, kvk_name}
+    period_label: User-friendly name for the period (e.g., "Week 1")
     """
     try:
+        import re
+        # Generate period_key from label (lowercase, no spaces)
+        period_key = re.sub(r'[^a-z0-9]', '_', period_label.lower())
+        if not period_key:
+            period_key = "total"
+            
         with closing(sqlite3.connect(DATABASE_PATH)) as conn:
             with conn:
                 cursor = conn.cursor()
                 
+                # 1. Register the period
+                kvk_name = stats_list[0]['kvk_name'] if stats_list else "General"
+                cursor.execute('''
+                    INSERT OR REPLACE INTO fort_periods (kvk_name, period_key, period_label)
+                    VALUES (?, ?, ?)
+                ''', (kvk_name, period_key, period_label))
+                
+                # 2. Insert stats
                 for stat in stats_list:
                     cursor.execute('''
                         INSERT OR REPLACE INTO fort_stats (
@@ -729,13 +755,80 @@ def import_fort_stats(stats_list: list):
                     ''', (
                         stat['player_id'], stat['player_name'], stat['forts_joined'],
                         stat['forts_launched'], stat['total_forts'], stat['penalties'],
-                        stat['kvk_name'], stat['period_key']
+                        stat['kvk_name'], period_key
                     ))
                 
                 return True
     except Exception as e:
         logger.error(f"Error importing fort stats: {e}")
         return False
+
+
+def get_fort_periods(kvk_name: str):
+    """Returns all fort periods for a KvK."""
+    try:
+        with closing(sqlite3.connect(DATABASE_PATH)) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM fort_periods WHERE kvk_name = ? ORDER BY created_at", (kvk_name,))
+            return [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error getting fort periods: {e}")
+        return []
+
+
+def get_player_fort_stats_history(player_id: int, kvk_name: str):
+    """Returns player's fort stats across all periods in a KvK."""
+    try:
+        with closing(sqlite3.connect(DATABASE_PATH)) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT fs.*, fp.period_label 
+                FROM fort_stats fs
+                JOIN fort_periods fp ON fs.kvk_name = fp.kvk_name AND fs.period_key = fp.period_key
+                WHERE fs.player_id = ? AND fs.kvk_name = ?
+                ORDER BY fp.created_at
+            ''', (player_id, kvk_name))
+            return [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error getting fort history: {e}")
+        return []
+
+
+def get_fort_leaderboard(kvk_name: str, period_key: str = "total"):
+    """
+    Returns fort leaderboard. 
+    If period_key is "total", sums up all periods for that KvK.
+    """
+    try:
+        with closing(sqlite3.connect(DATABASE_PATH)) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            if period_key == "total":
+                cursor.execute('''
+                    SELECT player_id, player_name, 
+                           SUM(forts_joined) as forts_joined, 
+                           SUM(forts_launched) as forts_launched, 
+                           SUM(total_forts) as total_forts,
+                           SUM(penalties) as penalties
+                    FROM fort_stats
+                    WHERE kvk_name = ?
+                    GROUP BY player_id
+                    ORDER BY total_forts DESC
+                ''', (kvk_name,))
+            else:
+                cursor.execute('''
+                    SELECT * FROM fort_stats
+                    WHERE kvk_name = ? AND period_key = ?
+                    ORDER BY total_forts DESC
+                ''', (kvk_name, period_key))
+                
+            return [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error getting fort leaderboard: {e}")
+        return []
 
 
 def get_fort_stats(player_id: int, kvk_name: str):

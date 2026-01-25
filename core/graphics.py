@@ -227,3 +227,54 @@ def create_player_stats_card(current_kills, req_kills, current_deaths, req_death
     except Exception as e:
         logger.error(f"Error generating stats card: {e}")
         return None
+
+
+def create_fort_dynamics_chart(history_data, player_name):
+    """
+    Generates a line chart showing fort participation over time.
+    history_data: list of dicts {period_label, total_forts, forts_joined, forts_launched}
+    """
+    try:
+        if not history_data:
+            return None
+            
+        # Extract data
+        labels = [h['period_label'] for h in history_data]
+        totals = [h['total_forts'] for h in history_data]
+        joined = [h['forts_joined'] for h in history_data]
+        launched = [h['forts_launched'] for h in history_data]
+        
+        # Setup figure
+        plt.style.use('dark_background')
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # Plot lines
+        ax.plot(labels, totals, marker='o', linewidth=3, color='#ffa500', label='Total')
+        ax.plot(labels, joined, marker='s', linestyle='--', alpha=0.7, color='#1e90ff', label='Joined')
+        ax.plot(labels, launched, marker='^', linestyle='--', alpha=0.7, color='#32cd32', label='Launched')
+        
+        # Fill area under total
+        ax.fill_between(labels, totals, alpha=0.1, color='#ffa500')
+        
+        # Customization
+        ax.set_title(f"Fort Participation Dynamics: {player_name}", fontsize=16, pad=20)
+        ax.set_ylabel("Number of Forts", fontsize=12)
+        ax.set_xlabel("Period", fontsize=12)
+        ax.grid(True, linestyle=':', alpha=0.3)
+        ax.legend()
+        
+        # Rotate labels if many
+        if len(labels) > 5:
+            plt.xticks(rotation=45)
+            
+        # Save to buffer
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+        buf.seek(0)
+        plt.close(fig)
+        return buf
+        
+    except Exception as e:
+        logger.error(f"Error generating fort dynamics chart: {e}")
+        return None
+
