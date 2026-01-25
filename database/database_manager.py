@@ -1026,18 +1026,21 @@ def link_account(discord_id: int, player_id: int, account_type: str = 'main'):
 
 def get_linked_accounts(discord_id: int):
     """
-    Returns a list of all linked game accounts for a Discord ID.
+    Returns a list of all linked game accounts for a Discord ID with player names.
     """
     conn = None
     try:
         conn = sqlite3.connect(DATABASE_PATH)
         cursor = conn.cursor()
 
-        cursor.execute("SELECT player_id, is_main_account, account_type FROM linked_accounts WHERE discord_id = ?", (discord_id,))
+        cursor.execute('''
+            SELECT la.player_id, la.is_main_account, la.account_type, kp.player_name
+            FROM linked_accounts la
+            LEFT JOIN kingdom_players kp ON la.player_id = kp.player_id
+            WHERE la.discord_id = ?
+        ''', (discord_id,))
         rows = cursor.fetchall()
 
-        # Handle legacy rows where account_type might be NULL if migration failed (unlikely with DEFAULT)
-        # or if we just want to be safe.
         accounts = []
         for row in rows:
             acc_type = row[2]
@@ -1047,7 +1050,8 @@ def get_linked_accounts(discord_id: int):
             accounts.append({
                 'player_id': row[0],
                 'is_main': bool(row[1]),
-                'account_type': acc_type
+                'account_type': acc_type,
+                'player_name': row[3] or "Unknown"
             })
         return accounts
     except sqlite3.Error as e:
