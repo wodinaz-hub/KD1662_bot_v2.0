@@ -571,3 +571,7 @@ class Stats(commands.Cog):
             logger.error(f"Failed to send log message: {e}")
             
         db_manager.log_admin_action(interaction.user.id, interaction.user.name, action, details)
+
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(Stats(bot))

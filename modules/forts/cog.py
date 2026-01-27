@@ -572,3 +572,7 @@ class Forts(commands.Cog):
             if admin_role and admin_role in interaction.user.roles:
                 return True
         return False
+
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(Forts(bot))
