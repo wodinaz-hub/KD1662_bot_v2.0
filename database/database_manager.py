@@ -831,6 +831,18 @@ def get_fort_leaderboard(kvk_name: str, period_key: str = "total"):
         return []
 
 
+def get_fort_seasons():
+    """Returns a list of all unique seasons (kvk_name) in fort_stats."""
+    try:
+        with closing(sqlite3.connect(DATABASE_PATH)) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT kvk_name FROM fort_stats ORDER BY kvk_name")
+            return [row[0] for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error getting fort seasons: {e}")
+        return []
+
+
 def get_fort_stats(player_id: int, kvk_name: str):
     """Gets fort stats for a player in a KvK."""
     try:

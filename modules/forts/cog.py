@@ -43,8 +43,8 @@ class Forts(commands.Cog):
             logger.error("ADMIN_ROLE_IDS not set in .env file.")
 
     @app_commands.command(name='my_forts', description='Show your fort participation statistics.')
-    @app_commands.describe(period="Select a specific period or 'Total'")
-    async def my_forts(self, interaction: discord.Interaction, period: str = "total"):
+    @app_commands.describe(period="Select a specific period or 'Total'", season="Select a fort season (e.g. Forts_2024)")
+    async def my_forts(self, interaction: discord.Interaction, period: str = "total", season: str = None):
         await interaction.response.defer()
         
         # Get linked account
@@ -57,23 +57,24 @@ class Forts(commands.Cog):
         player_id = accounts[0]['player_id']
         player_name = accounts[0]['player_name']
         
-        current_kvk = db_manager.get_current_kvk_name() or "General"
+        # Use provided season, or current KvK, or "General"
+        target_season = season if season else (db_manager.get_current_kvk_name() or "General")
 
         if period == "total":
             # Sum up all periods
-            leaderboard = db_manager.get_fort_leaderboard(current_kvk, "total")
+            leaderboard = db_manager.get_fort_leaderboard(target_season, "total")
             stats = next((p for p in leaderboard if p['player_id'] == player_id), None)
             period_label = "Total (All Periods)"
         else:
             # Specific period
-            leaderboard = db_manager.get_fort_leaderboard(current_kvk, period)
+            leaderboard = db_manager.get_fort_leaderboard(target_season, period)
             stats = next((p for p in leaderboard if p['player_id'] == player_id), None)
             # Find label
-            periods = db_manager.get_fort_periods(current_kvk)
+            periods = db_manager.get_fort_periods(target_season)
             period_label = next((p['period_label'] for p in periods if p['period_key'] == period), period)
 
         embed = discord.Embed(title=f"🏰 Fort Statistics: {player_name}", color=discord.Color.dark_orange())
-        embed.description = f"Season: **{current_kvk}**\nPeriod: **{period_label}**"
+        embed.description = f"Season: **{target_season}**\nPeriod: **{period_label}**"
         
         file = None
         if stats:
@@ -97,7 +98,7 @@ class Forts(commands.Cog):
                 embed.add_field(name="⚠️ Penalties", value=f"{penalties} points", inline=False)
                 
             # Add History/Dynamics
-            history = db_manager.get_player_fort_stats_history(player_id, current_kvk)
+            history = db_manager.get_player_fort_stats_history(player_id, target_season)
             if history and len(history) > 1:
                 history_text = ""
                 for h in history:
@@ -117,10 +118,20 @@ class Forts(commands.Cog):
         else:
             await interaction.followup.send(embed=embed)
 
+    @my_forts.autocomplete('season')
+    async def fort_season_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        # Get unique seasons from fort_stats table
+        seasons = db_manager.get_fort_seasons()
+        choices = [app_commands.Choice(name=s, value=s) for s in seasons if current.lower() in s.lower()]
+        return choices[:25]
+
     @my_forts.autocomplete('period')
     async def my_forts_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        current_kvk = db_manager.get_current_kvk_name() or "General"
-        periods = db_manager.get_fort_periods(current_kvk)
+        # Try to get season from interaction options
+        season = interaction.namespace.season
+        target_season = season if season else (db_manager.get_current_kvk_name() or "General")
+        
+        periods = db_manager.get_fort_periods(target_season)
         
         choices = [app_commands.Choice(name="📊 Total (All Periods)", value="total")]
         for p in periods:
@@ -130,35 +141,39 @@ class Forts(commands.Cog):
         return choices[:25]
 
     @app_commands.command(name='fort_leaderboard', description='Show fort participation rankings.')
-    @app_commands.describe(period="Select a specific period or 'Total'")
-    async def fort_leaderboard(self, interaction: discord.Interaction, period: str = "total"):
+    @app_commands.describe(period="Select a specific period or 'Total'", season="Select a fort season")
+    async def fort_leaderboard(self, interaction: discord.Interaction, period: str = "total", season: str = None):
         await interaction.response.defer()
         
-        current_kvk = db_manager.get_current_kvk_name() or "General"
-        data = db_manager.get_fort_leaderboard(current_kvk, period)
+        target_season = season if season else (db_manager.get_current_kvk_name() or "General")
+        data = db_manager.get_fort_leaderboard(target_season, period)
         
         if not data:
-            await interaction.followup.send(f"No fort data found for **{current_kvk}** ({period}).")
+            await interaction.followup.send(f"No fort data found for **{target_season}** ({period}).")
             return
 
         # Find label
         period_label = "Total"
         if period != "total":
-            periods = db_manager.get_fort_periods(current_kvk)
+            periods = db_manager.get_fort_periods(target_season)
             period_label = next((p['period_label'] for p in periods if p['period_key'] == period), period)
 
         from .views import FortLeaderboardPaginationView
-        view = FortLeaderboardPaginationView(data, f"🏰 Fort Leaderboard: {period_label}", current_kvk)
+        view = FortLeaderboardPaginationView(data, f"🏰 Fort Leaderboard: {period_label}", target_season)
         await interaction.followup.send(embed=view.create_embed(), view=view)
 
+    @fort_leaderboard.autocomplete('season')
+    async def fort_leaderboard_season_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        return await self.fort_season_autocomplete(interaction, current)
+
     @fort_leaderboard.autocomplete('period')
-    async def fort_leaderboard_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    async def fort_leaderboard_period_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return await self.my_forts_autocomplete(interaction, current)
 
     @app_commands.command(name='fort_downloads', description='Download and parse fort stats from the stats channel.')
-    @app_commands.describe(start_date="DD/MM/YYYY HH:MM", end_date="DD/MM/YYYY HH:MM", period_name="Name for this period (e.g., Week 1)")
+    @app_commands.describe(start_date="DD/MM/YYYY HH:MM", end_date="DD/MM/YYYY HH:MM", period_name="Name for this period (e.g., Week 1)", season="Target season (e.g. Forts_2024)")
     @app_commands.default_permissions(administrator=True)
-    async def fort_downloads(self, interaction: discord.Interaction, start_date: str, end_date: str, period_name: str = "Total"):
+    async def fort_downloads(self, interaction: discord.Interaction, start_date: str, end_date: str, period_name: str = "Total", season: str = None):
         # Check admin
         if not self.is_admin(interaction):
             await interaction.response.send_message("You do not have permissions.", ephemeral=True)
@@ -183,11 +198,8 @@ class Forts(commands.Cog):
             await interaction.edit_original_response(content="❌ Invalid date format. Use DD/MM/YYYY HH:MM (e.g., 08/08/2025 00:00)")
             return
 
-        current_kvk = db_manager.get_current_kvk_name()
-        if not current_kvk:
-            # Fallback to "General" if no KvK is set
-            current_kvk = "General"
-            await interaction.followup.send("⚠️ No active KvK season set. Saving stats to **General** category.")
+        target_season = season if season else (db_manager.get_current_kvk_name() or "General")
+        await interaction.followup.send(f"🔄 Processing stats for season: **{target_season}**, period: **{period_name}**")
 
     async def process_fort_file(self, attachment, current_kvk):
         """Helper to process a single fort stats file."""
@@ -256,20 +268,20 @@ class Forts(commands.Cog):
             return None
 
     @app_commands.command(name='fort_wait', description='Wait for a fort stats file to be uploaded in this channel.')
-    @app_commands.describe(period_name="Name for this period (e.g., Week 1)")
+    @app_commands.describe(period_name="Name for this period (e.g., Week 1)", season="Target season (e.g. Forts_2024)")
     @app_commands.default_permissions(administrator=True)
-    async def fort_wait(self, interaction: discord.Interaction, period_name: str = "Total"):
+    async def fort_wait(self, interaction: discord.Interaction, period_name: str = "Total", season: str = None):
         # Check admin
         if not self.is_admin(interaction):
             await interaction.response.send_message("You do not have permissions.", ephemeral=True)
             return
 
-        current_kvk = db_manager.get_current_kvk_name() or "General"
+        target_season = season if season else (db_manager.get_current_kvk_name() or "General")
         
         await interaction.response.send_message(
             f"👀 **Listening Mode Active**\n"
             f"Waiting for a CSV/Excel file in this channel for 60 seconds...\n"
-            f"Target Season: **{current_kvk}**\n"
+            f"Target Season: **{target_season}**\n"
             f"Target Period: **{period_name}**\n"
             f"👉 *Run the other bot's command now!*",
             ephemeral=False
@@ -286,7 +298,7 @@ class Forts(commands.Cog):
             attachment = message.attachments[0]
             await interaction.followup.send(f"📥 File detected: `{attachment.filename}`. Processing...")
             
-            stats_data = await self.process_fort_file(attachment, current_kvk)
+            stats_data = await self.process_fort_file(attachment, target_season)
             
             if not stats_data:
                 await interaction.followup.send("❌ Failed to parse the file or no valid data found.")
@@ -307,7 +319,7 @@ class Forts(commands.Cog):
                     'forts_launched': data['launched'],
                     'total_forts': total,
                     'penalties': penalty,
-                    'kvk_name': current_kvk,
+                    'kvk_name': target_season,
                     'period_key': 'total'
                 })
                 
@@ -323,8 +335,8 @@ class Forts(commands.Cog):
             await interaction.followup.send(f"❌ An error occurred: {e}")
 
     @commands.command(name='fort_upload')
-    async def fort_upload_prefix(self, ctx, period_name: str = "Total"):
-        """Upload a fort stats file manually (Prefix Command). Usage: !fort_upload [period_name] (attach file)"""
+    async def fort_upload_prefix(self, ctx, period_name: str = "Total", season: str = None):
+        """Upload a fort stats file manually (Prefix Command). Usage: !fort_upload [period_name] [season] (attach file)"""
         # Check admin
         if not self.is_admin_ctx(ctx):
             await ctx.send("❌ You do not have permissions.")
@@ -339,12 +351,11 @@ class Forts(commands.Cog):
             await ctx.send("❌ Please upload a CSV or Excel file.")
             return
 
-        # Always use "General" or "Total" for forts, ignoring KvK as requested
-        current_kvk = db_manager.get_current_kvk_name() or "General"
+        target_season = season if season else (db_manager.get_current_kvk_name() or "General")
         
-        await ctx.send(f"📥 Processing `{attachment.filename}` for period **{period_name}**...")
+        await ctx.send(f"📥 Processing `{attachment.filename}` for season **{target_season}**, period **{period_name}**...")
         
-        stats_data = await self.process_fort_file(attachment, current_kvk)
+        stats_data = await self.process_fort_file(attachment, target_season)
         
         if not stats_data:
             await ctx.send("❌ Failed to parse the file or no valid data found.")
@@ -365,7 +376,7 @@ class Forts(commands.Cog):
                 'forts_launched': data['launched'],
                 'total_forts': total,
                 'penalties': penalty,
-                'kvk_name': current_kvk,
+                'kvk_name': target_season,
                 'period_key': 'total'
             })
             
@@ -386,9 +397,10 @@ class Forts(commands.Cog):
     @app_commands.command(name='fort_downloads_auto', description='Download and parse fort stats from the stats channel.')
     @app_commands.describe(start_date="Optional: Start date (DD/MM/YYYY HH:MM). Defaults to 24h ago.", 
                           end_date="Optional: End date (DD/MM/YYYY HH:MM). Defaults to now.",
-                          period_name="Name for this period (e.g., Week 1)")
+                          period_name="Name for this period (e.g., Week 1)",
+                          season="Target season (e.g. Forts_2024)")
     @app_commands.default_permissions(administrator=True)
-    async def fort_downloads_auto(self, interaction: discord.Interaction, start_date: str = None, end_date: str = None, period_name: str = "Total"):
+    async def fort_downloads_auto(self, interaction: discord.Interaction, start_date: str = None, end_date: str = None, period_name: str = "Total", season: str = None):
         # Check admin
         if not self.is_admin(interaction):
             await interaction.response.send_message("You do not have permissions.", ephemeral=True)
@@ -454,18 +466,8 @@ class Forts(commands.Cog):
             await interaction.edit_original_response(content="❌ Invalid date format. Use DD/MM/YYYY HH:MM (e.g., 08/08/2025 00:00)")
             return
 
-        current_kvk = db_manager.get_current_kvk_name()
-        if not current_kvk:
-            # Fallback to "General" if no KvK is set
-            current_kvk = "General"
-            await interaction.followup.send("⚠️ No active KvK season set. Saving stats to **General** category.")
-
-        # Format dates for display
-        s_str = start_dt.strftime("%d/%m/%Y %H:%M")
-        e_str = end_dt.strftime("%d/%m/%Y %H:%M")
-        
-        logger.info(f"Scanning channel {channel.name} ({channel.id}) from {s_str} to {e_str}")
-        await interaction.followup.send(f"🔄 Scanning channel <#{channel.id}> for CSV files between {s_str} and {e_str}...")
+        target_season = season if season else (db_manager.get_current_kvk_name() or "General")
+        await interaction.followup.send(f"🔄 Scanning channel <#{channel.id}> for season **{target_season}**, period **{period_name}**...")
         
         processed_files = 0
         total_stats = {} # player_id -> {joined, launched, name}
@@ -492,7 +494,7 @@ class Forts(commands.Cog):
                 for attachment in message.attachments:
                     logger.info(f"Found attachment: {attachment.filename}")
                     if attachment.filename.lower().endswith('.csv') or attachment.filename.lower().endswith('.xlsx'):
-                        file_stats = await self.process_fort_file(attachment, current_kvk)
+                        file_stats = await self.process_fort_file(attachment, target_season)
                         if file_stats:
                             for pid, data in file_stats.items():
                                 if pid not in total_stats:
