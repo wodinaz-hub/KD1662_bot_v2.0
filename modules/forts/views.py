@@ -1,6 +1,8 @@
 import discord
+from database import database_manager as db_manager
 
 class FortLeaderboardPaginationView(discord.ui.View):
+    # ... existing code ...
     def __init__(self, data, title, kvk_name):
         super().__init__(timeout=180)
         self.data = data
@@ -59,3 +61,73 @@ class FortLeaderboardPaginationView(discord.ui.View):
         self.current_page += 1
         self.update_buttons()
         await interaction.response.edit_message(embed=self.create_embed(), view=self)
+
+
+class FortStatsView(discord.ui.View):
+    def __init__(self, player_id, player_name, current_season, current_period, fort_cog):
+        super().__init__(timeout=300)
+        self.player_id = player_id
+        self.player_name = player_name
+        self.selected_season = current_season
+        self.selected_period = current_period
+        self.fort_cog = fort_cog
+        self.update_components()
+
+    def update_components(self):
+        self.clear_items()
+        
+        # Season Select
+        seasons = db_manager.get_fort_seasons()
+        if seasons:
+            season_options = [
+                discord.SelectOption(
+                    label=f"📁 {s}", 
+                    value=s, 
+                    default=(s == self.selected_season)
+                ) for s in seasons[:25]
+            ]
+            season_select = discord.ui.Select(placeholder="Выберите сезон...", options=season_options, row=0)
+            season_select.callback = self.season_callback
+            self.add_item(season_select)
+            
+        # Period Select
+        periods = db_manager.get_fort_periods(self.selected_season)
+        period_options = [
+            discord.SelectOption(
+                label="📊 Итого за сезон (Total)", 
+                value="total", 
+                default=(self.selected_period == "total")
+            )
+        ]
+        for p in periods[:24]:
+            period_options.append(
+                discord.SelectOption(
+                    label=f"📅 {p['period_label']}", 
+                    value=p['period_key'], 
+                    default=(p['period_key'] == self.selected_period)
+                )
+            )
+        
+        period_select = discord.ui.Select(placeholder="Выберите период...", options=period_options, row=1)
+        period_select.callback = self.period_callback
+        self.add_item(period_select)
+
+    async def season_callback(self, interaction: discord.Interaction):
+        self.selected_season = interaction.data['values'][0]
+        self.selected_period = "total"
+        await self.update_message(interaction)
+
+    async def period_callback(self, interaction: discord.Interaction):
+        self.selected_period = interaction.data['values'][0]
+        await self.update_message(interaction)
+
+    async def update_message(self, interaction: discord.Interaction):
+        embed, file = await self.fort_cog.get_my_forts_embed_and_file(
+            self.player_id, self.player_name, self.selected_season, self.selected_period
+        )
+        self.update_components()
+        
+        if file:
+            await interaction.response.edit_message(embed=embed, attachments=[file], view=self)
+        else:
+            await interaction.response.edit_message(embed=embed, attachments=[], view=self)

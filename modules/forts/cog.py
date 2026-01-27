@@ -60,21 +60,33 @@ class Forts(commands.Cog):
         # Use provided season, or current KvK, or "General"
         target_season = season if season else (db_manager.get_current_kvk_name() or "General")
 
+        embed, file = await self.get_my_forts_embed_and_file(player_id, player_name, target_season, period)
+        
+        from .views import FortStatsView
+        view = FortStatsView(player_id, player_name, target_season, period, self)
+        
+        if file:
+            await interaction.followup.send(embed=embed, file=file, view=view)
+        else:
+            await interaction.followup.send(embed=embed, view=view)
+
+    async def get_my_forts_embed_and_file(self, player_id, player_name, season, period):
+        """Helper to generate the embed and dynamics chart for a player."""
         if period == "total":
             # Sum up all periods
-            leaderboard = db_manager.get_fort_leaderboard(target_season, "total")
+            leaderboard = db_manager.get_fort_leaderboard(season, "total")
             stats = next((p for p in leaderboard if p['player_id'] == player_id), None)
             period_label = "Total (All Periods)"
         else:
             # Specific period
-            leaderboard = db_manager.get_fort_leaderboard(target_season, period)
+            leaderboard = db_manager.get_fort_leaderboard(season, period)
             stats = next((p for p in leaderboard if p['player_id'] == player_id), None)
             # Find label
-            periods = db_manager.get_fort_periods(target_season)
+            periods = db_manager.get_fort_periods(season)
             period_label = next((p['period_label'] for p in periods if p['period_key'] == period), period)
 
         embed = discord.Embed(title=f"🏰 Fort Statistics: {player_name}", color=discord.Color.dark_orange())
-        embed.description = f"Season: **{target_season}**\nPeriod: **{period_label}**"
+        embed.description = f"Season: **{season}**\nPeriod: **{period_label}**"
         
         file = None
         if stats:
@@ -98,7 +110,7 @@ class Forts(commands.Cog):
                 embed.add_field(name="⚠️ Penalties", value=f"{penalties} points", inline=False)
                 
             # Add History/Dynamics
-            history = db_manager.get_player_fort_stats_history(player_id, target_season)
+            history = db_manager.get_player_fort_stats_history(player_id, season)
             if history and len(history) > 1:
                 history_text = ""
                 for h in history:
@@ -113,10 +125,7 @@ class Forts(commands.Cog):
         else:
             embed.description += f"\n\nNo fort statistics found for this period."
             
-        if file:
-            await interaction.followup.send(embed=embed, file=file)
-        else:
-            await interaction.followup.send(embed=embed)
+        return embed, file
 
     @my_forts.autocomplete('season')
     async def fort_season_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
