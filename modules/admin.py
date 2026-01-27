@@ -672,6 +672,46 @@ class CompliancePaginationView(discord.ui.View):
         await interaction.response.edit_message(embed=self.create_embed(), view=self)
 
 
+class AdminPanelView(discord.ui.View):
+    def __init__(self, admin_cog):
+        super().__init__(timeout=300)
+        self.admin_cog = admin_cog
+
+    @discord.ui.button(label="⚙️ Set KvK", style=discord.ButtonStyle.primary, row=0)
+    async def set_kvk(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.admin_cog.set_kvk_command(interaction)
+
+    @discord.ui.button(label="📋 Requirements", style=discord.ButtonStyle.primary, row=0)
+    async def set_reqs(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.admin_cog.set_requirements_text(interaction)
+
+    @discord.ui.button(label="📥 Upload Snapshot", style=discord.ButtonStyle.success, row=1)
+    async def upload_snapshot(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("To upload a snapshot, use the command: `/upload_snapshot`", ephemeral=True)
+
+    @discord.ui.button(label="🏰 Fort Upload", style=discord.ButtonStyle.success, row=1)
+    async def fort_upload(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # We need to get the Forts cog
+        forts_cog = interaction.client.get_cog("Forts")
+        if forts_cog:
+            await forts_cog.fort_wait(interaction)
+        else:
+            await interaction.response.send_message("❌ Forts module not found.", ephemeral=True)
+
+    @discord.ui.button(label="📁 Archive KvK", style=discord.ButtonStyle.secondary, row=2)
+    async def archive_kvk(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.admin_cog.finish_kvk(interaction)
+
+    @discord.ui.button(label="🗑️ Delete Season", style=discord.ButtonStyle.danger, row=2)
+    async def delete_season(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("To delete a season, use: `/delete_kvk_season season:NAME`", ephemeral=True)
+
+    @discord.ui.button(label="📦 Backup DB", style=discord.ButtonStyle.secondary, row=3)
+    async def backup_db(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.admin_cog.admin_backup(interaction)
+
+
+
 # Cog for administrator commands
 class Admin(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -698,11 +738,25 @@ class Admin(commands.Cog):
                 logger.info(f"Admin role IDs successfully loaded: {self.admin_role_ids}")
             else:
                 logger.error("No valid admin role IDs found. Check ADMIN_ROLE_IDS in .env file.")
-        else:
-            logger.error("ADMIN_ROLE_IDS not set in .env file.")
-
+        
         # Start background tasks
         self.backup_loop.start()
+
+    @app_commands.command(name='admin_panel', description='Open the central administrative dashboard.')
+    @app_commands.default_permissions(administrator=True)
+    async def admin_panel(self, interaction: discord.Interaction):
+        if not self.is_admin(interaction):
+            await interaction.response.send_message("❌ You do not have permissions.", ephemeral=True)
+            return
+
+        embed = discord.Embed(
+            title="👑 Admin Control Panel",
+            description="Welcome to the central management hub. Use the buttons below to manage KvK seasons, player stats, and fort participation.",
+            color=discord.Color.dark_red()
+        )
+        embed.add_field(name="Current Season", value=f"**{db_manager.get_current_kvk_name() or 'Not set'}**", inline=True)
+        
+        await interaction.response.send_message(embed=embed, view=AdminPanelView(self))
 
     def cog_unload(self):
         self.backup_loop.cancel()

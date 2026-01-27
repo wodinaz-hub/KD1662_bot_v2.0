@@ -269,3 +269,98 @@ class StartView(discord.ui.View):
         embed.add_field(name="📊 My Stats", value="Check your personal performance.", inline=False)
         embed.add_field(name="🏰 Kingdom Stats", value="View global kingdom statistics.", inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=False)
+
+
+class UnifiedStatsView(discord.ui.View):
+    """A unified interactive view for player statistics with season, period, and account selection."""
+    def __init__(self, accounts, current_season, current_period, current_player_id, stats_cog):
+        super().__init__(timeout=300)
+        self.accounts = accounts
+        self.selected_season = current_season
+        self.selected_period = current_period
+        self.selected_player_id = current_player_id
+        self.stats_cog = stats_cog
+        self.update_components()
+
+    def update_components(self):
+        self.clear_items()
+        
+        # 1. Season Selection
+        seasons = db_manager.get_all_seasons()
+        if seasons:
+            season_options = [
+                discord.SelectOption(
+                    label=f"{'📁' if s['is_archived'] else '⚔️'} {s['label']}", 
+                    value=s['value'], 
+                    default=(s['value'] == self.selected_season)
+                ) for s in seasons[:25]
+            ]
+            season_select = discord.ui.Select(placeholder="Choose Season...", options=season_options, row=0)
+            season_select.callback = self.season_callback
+            self.add_item(season_select)
+            
+        # 2. Period Selection
+        periods = db_manager.get_all_periods(self.selected_season)
+        period_options = [
+            discord.SelectOption(
+                label="📊 All Periods (Total)", 
+                value="all", 
+                default=(self.selected_period == "all")
+            )
+        ]
+        if periods:
+            unique_periods = sorted(list(set([p['period_key'] for p in periods])))
+            for p_key in unique_periods[:24]:
+                period_options.append(
+                    discord.SelectOption(
+                        label=f"📅 {p_key}", 
+                        value=p_key, 
+                        default=(p_key == self.selected_period)
+                    )
+                )
+        
+        period_select = discord.ui.Select(placeholder="Choose Period...", options=period_options, row=1)
+        period_select.callback = self.period_callback
+        self.add_item(period_select)
+
+        # 3. Account Selection (Buttons)
+        if len(self.accounts) > 1:
+            for acc in self.accounts:
+                style = discord.ButtonStyle.primary if acc['player_id'] == self.selected_player_id else discord.ButtonStyle.secondary
+                label = f"{acc['account_type'].capitalize()}: {acc['player_id']}"
+                btn = discord.ui.Button(label=label, style=style, row=2)
+                
+                # Create a closure for the callback
+                async def make_callback(p_id):
+                    async def callback(interaction: discord.Interaction):
+                        self.selected_player_id = p_id
+                        await self.update_message(interaction)
+                    return callback
+                
+                btn.callback = await make_callback(acc['player_id'])
+                self.add_item(btn)
+
+    async def season_callback(self, interaction: discord.Interaction):
+        self.selected_season = interaction.data['values'][0]
+        # Reset period to 'all' when season changes
+        self.selected_period = "all"
+        await self.update_message(interaction)
+
+    async def period_callback(self, interaction: discord.Interaction):
+        self.selected_period = interaction.data['values'][0]
+        await self.update_message(interaction)
+
+    async def update_message(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        
+        # Get new embed and file
+        embed, file = await self.stats_cog.get_player_stats_embed_and_file(
+            self.selected_player_id, self.selected_season, self.selected_period
+        )
+        
+        self.update_components()
+        
+        if file:
+            await interaction.edit_original_response(embed=embed, attachments=[file], view=self)
+        else:
+            await interaction.edit_original_response(embed=embed, attachments=[], view=self)

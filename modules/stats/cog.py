@@ -142,25 +142,26 @@ class Stats(commands.Cog):
             await self.log_to_channel(interaction, "Command Failed", "Command: /my_stats\nReason: No active KvK")
             return
 
-        if len(accounts) == 1:
-            await self.show_player_stats(interaction, accounts[0]['player_id'], target_kvk)
-        else:
-            # Get periods to determine which view to use
-            periods = db_manager.get_all_periods(target_kvk) or []
-            unique_periods = list(set([p['period_key'] for p in periods])) if periods else []
-            
-            # Use PeriodSelectView if multiple periods exist, otherwise MyStatsView
-            if len(unique_periods) > 1:
-                view = PeriodSelectView(accounts, target_kvk, periods, self)
-                message = "Select period and account to view stats:"
-            else:
-                view = MyStatsView(accounts, target_kvk, self)
-                message = "Select an account to view stats, or view Total:"
-            
+        # Use main account by default for the initial view
+        player_id = accounts[0]['player_id']
+        player_name = accounts[0]['player_name']
+        
+        embed, file = await self.get_player_stats_embed_and_file(player_id, target_kvk, "all")
+        
+        view = UnifiedStatsView(accounts, target_kvk, "all", player_id, self)
+        
+        if file:
             if interaction.response.is_done():
-                await interaction.followup.send(message, view=view)
+                await interaction.followup.send(embed=embed, file=file, view=view)
             else:
-                await interaction.response.send_message(message, view=view)
+                await interaction.response.send_message(embed=embed, file=file, view=view)
+        else:
+            if interaction.response.is_done():
+                await interaction.followup.send(embed=embed, view=view)
+            else:
+                await interaction.response.send_message(embed=embed, view=view)
+        
+        await self.log_to_channel(interaction, "Command Used", f"Command: /my_stats (Season: {target_kvk})")
 
     async def kingdom_stats_logic(self, interaction: discord.Interaction, period_key: str = "all", kvk_name: str = None):
         if not kvk_name:
@@ -287,16 +288,66 @@ class Stats(commands.Cog):
             await interaction.response.send_message(embed=embed)
         await self.log_to_channel(interaction, "Command Used", "Command: /kingdom_stats")
 
-    async def show_player_stats(self, interaction: discord.Interaction, player_id: int, kvk_name: str, period_key: str = "all"):
+    async def get_player_stats_embed_and_file(self, player_id: int, kvk_name: str, period_key: str = "all"):
+        """Helper to generate the player stats embed and dynamics chart."""
         stats_row = db_manager.get_player_stats_by_period(player_id, kvk_name, period_key)
         stats = dict(stats_row) if stats_row else None
 
         if not stats:
-            if interaction.response.is_done():
-                await interaction.followup.send(f"No data found for account ID `{player_id}` in KvK `{kvk_name}`.", ephemeral=False)
-            else:
-                await interaction.response.send_message(f"No data found for account ID `{player_id}` in KvK `{kvk_name}`.", ephemeral=False)
-            return
+            embed = discord.Embed(
+                title="❌ No Data Found",
+                description=f"No statistics found for account ID `{player_id}` in season `{kvk_name}`.",
+                color=discord.Color.red()
+            )
+            return embed, None
+
+        embed = discord.Embed(
+            title=f"📊 Statistics: {stats['player_name']}",
+            description=f"Season: **{kvk_name}**\nPeriod: **{period_key.capitalize()}**",
+            color=discord.Color.green()
+        )
+        
+        # Add stats fields using the helper
+        add_stats_fields(embed, stats)
+        
+        # Add comparison if current KvK and period is 'all'
+        if kvk_name == db_manager.get_current_kvk_name() and period_key == "all":
+            # Find previous KvK
+            seasons = db_manager.get_all_seasons()
+            prev_kvk = None
+            for i, s in enumerate(seasons):
+                if s['value'] == kvk_name and i > 0:
+                    prev_kvk = seasons[i-1]['value']
+                    break
+            
+            if prev_kvk:
+                prev_stats = db_manager.get_player_stats_by_period(player_id, prev_kvk, "all")
+                if prev_stats:
+                    diff_kp = stats['total_kill_points'] - prev_stats['total_kill_points']
+                    diff_deaths = stats['total_deaths'] - prev_stats['total_deaths']
+                    
+                    # Calculate % change
+                    if prev_stats['total_kill_points'] > 0:
+                        pct_kp = (diff_kp / prev_stats['total_kill_points']) * 100
+                    else:
+                        pct_kp = 0
+                        
+                    embed.add_field(
+                        name=f"🆚 vs {prev_kvk}",
+                        value=f"KP: {diff_kp:+,.0f} ({pct_kp:+.1f}%)\nDeaths: {diff_deaths:+,.0f}",
+                        inline=False
+                    )
+
+        # Generate dynamics chart if history exists
+        file = None
+        history = db_manager.get_player_stats_history(player_id, kvk_name)
+        if history and len(history) > 1:
+            chart_buf = graphics.create_player_dynamics_chart(history, stats['player_name'])
+            if chart_buf:
+                file = discord.File(chart_buf, filename="stats_dynamics.png")
+                embed.set_image(url="attachment://stats_dynamics.png")
+        
+        return embed, file
 
         requirements = db_manager.get_requirements(kvk_name, stats['total_power'])
         
