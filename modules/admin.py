@@ -1052,8 +1052,9 @@ class Admin(commands.Cog):
 
         current_kvk = db_manager.get_current_kvk_name()
         if not current_kvk or current_kvk == "Not set":
+            cmd_name = interaction.command.name if interaction.command else "set_requirements_text"
             await interaction.response.send_message("Please set the current KvK season first using /set_kvk.", ephemeral=False)
-            await self.log_to_channel(interaction, "Command Failed", f"Command: /{interaction.command.name}\nReason: No active KvK")
+            await self.log_to_channel(interaction, "Command Failed", f"Command: /{cmd_name}\nReason: No active KvK")
             return
 
         await interaction.response.send_modal(RequirementsModal(self))
@@ -1069,8 +1070,9 @@ class Admin(commands.Cog):
         current_kvk_name = db_manager.get_current_kvk_name()
         
         if not current_kvk_name or current_kvk_name == "Not set":
+            cmd_name = interaction.command.name if interaction.command else "finish_kvk"
             await interaction.response.send_message("No KvK season is currently active.", ephemeral=False)
-            await self.log_to_channel(interaction, "Command Failed", f"Command: /{interaction.command.name}\nReason: No active KvK")
+            await self.log_to_channel(interaction, "Command Failed", f"Command: /{cmd_name}\nReason: No active KvK")
             return
 
         # Confirm action
@@ -1195,8 +1197,9 @@ class Admin(commands.Cog):
 
         current_kvk = db_manager.get_current_kvk_name()
         if not current_kvk or current_kvk == "Not set":
+            cmd_name = interaction.command.name if interaction.command else "calculate_period"
             await interaction.response.send_message("Please set the current KvK season first using /set_kvk.", ephemeral=False)
-            await self.log_to_channel(interaction, "Command Failed", f"Command: /{interaction.command.name}\nReason: No active KvK")
+            await self.log_to_channel(interaction, "Command Failed", f"Command: /{cmd_name}\nReason: No active KvK")
             return
 
         await interaction.response.defer(ephemeral=False)

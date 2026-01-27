@@ -137,15 +137,17 @@ bot = MyBot(intents=intents)
 # Global error handler for app commands
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    command_name = interaction.command.name if interaction.command else "Unknown Command"
+    
     if isinstance(error, app_commands.CommandInvokeError):
         original = error.original
         if isinstance(original, discord.errors.NotFound):
             # Interaction expired - silently log, user already sees "interaction failed"
-            logger.warning(f"Interaction expired for command '{interaction.command.name}' from {interaction.user}")
+            logger.warning(f"Interaction expired for command '{command_name}' from {interaction.user}")
             return
     
     # Log other errors
-    logger.error(f"Error in command '{interaction.command.name}': {error}")
+    logger.error(f"Error in command '{command_name}': {error}")
     
     # Try to respond if possible
     try:
