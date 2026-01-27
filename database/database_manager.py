@@ -1839,3 +1839,22 @@ def get_player_rank(player_id: int, kvk_name: str):
         if conn:
             conn.close()
 
+def clear_all_fort_data():
+    """
+    Deletes all records from fort_stats and fort_periods tables.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM fort_stats")
+        cursor.execute("DELETE FROM fort_periods")
+        conn.commit()
+        logger.info("All fort data has been cleared from the database.")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Error clearing fort data: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()

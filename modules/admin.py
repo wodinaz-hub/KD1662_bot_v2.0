@@ -324,6 +324,28 @@ class ResetBotConfirmView(discord.ui.View):
             )
             await self.admin_cog.log_to_channel(interaction, "RESET BOT", "All data wiped.")
 
+class ClearFortsConfirmView(discord.ui.View):
+    def __init__(self, admin_cog):
+        super().__init__(timeout=60)
+        self.admin_cog = admin_cog
+
+    @discord.ui.button(label="YES, CLEAR ALL FORT DATA", style=discord.ButtonStyle.red)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if db_manager.clear_all_fort_data():
+            await interaction.response.edit_message(
+                content="✅ **ALL FORT DATA HAS BEEN CLEARED.**",
+                view=None
+            )
+            await self.admin_cog.log_to_channel(interaction, "CLEAR FORT DATA", "All fort stats and periods cleared.")
+        else:
+            await interaction.response.edit_message(content="❌ Failed to clear fort data.", view=None)
+        self.stop()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.grey)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="Action cancelled.", view=None)
+        self.stop()
+
 class WizardConfirmationView(discord.ui.View):
     def __init__(self, kvk_name, reqs_count, admin_cog):
         super().__init__(timeout=120)
@@ -1395,6 +1417,22 @@ class Admin(commands.Cog):
             ephemeral=False
         )
         await self.log_to_channel(interaction, "Command Used", "Command: /reset_bot")
+    
+    @app_commands.command(name="admin_clear_forts", description="⚠️ Permanently clear all fort participation data.")
+    @app_commands.default_permissions(administrator=True)
+    async def admin_clear_forts(self, interaction: discord.Interaction):
+        if not self.is_admin(interaction):
+            await interaction.response.send_message("You do not have permissions.", ephemeral=True)
+            return
+
+        await interaction.response.send_message(
+            "⚠️ **DANGER ZONE** ⚠️\n"
+            "Are you sure you want to **DELETE ALL FORT DATA**?\n"
+            "This will remove all fort stats and periods. This action cannot be undone.",
+            view=ClearFortsConfirmView(self),
+            ephemeral=True
+        )
+        await self.log_to_channel(interaction, "Command Used", "Command: /admin_clear_forts")
 
 
     @app_commands.command(name="kvk_setup", description="🧙‍♂️ Guided wizard to set up a new KvK season.")
@@ -1499,6 +1537,7 @@ class Admin(commands.Cog):
             "`/export_logs` - Export admin logs\n"
             "`/export_leaderboard` - Export DKP leaderboard\n"
             "`/set_reward_role` - Set role for compliant players\n"
+            "`/admin_clear_forts` - ⚠️ Clear all fort data\n"
             "`/reset_bot` - ⚠️ Delete ALL data"
         )
         
