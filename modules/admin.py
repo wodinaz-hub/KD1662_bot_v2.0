@@ -679,11 +679,11 @@ class AdminPanelView(discord.ui.View):
 
     @discord.ui.button(label="⚙️ Set KvK", style=discord.ButtonStyle.primary, row=0)
     async def set_kvk(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.admin_cog.set_kvk_command(interaction)
+        await self.admin_cog.set_kvk_command.callback(self.admin_cog, interaction)
 
     @discord.ui.button(label="📋 Requirements", style=discord.ButtonStyle.primary, row=0)
     async def set_reqs(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.admin_cog.set_requirements_text(interaction)
+        await self.admin_cog.set_requirements_text.callback(self.admin_cog, interaction)
 
     @discord.ui.button(label="📥 Upload Snapshot", style=discord.ButtonStyle.success, row=1)
     async def upload_snapshot(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -694,13 +694,13 @@ class AdminPanelView(discord.ui.View):
         # We need to get the Forts cog
         forts_cog = interaction.client.get_cog("Forts")
         if forts_cog:
-            await forts_cog.fort_wait(interaction)
+            await forts_cog.fort_wait.callback(forts_cog, interaction)
         else:
             await interaction.response.send_message("❌ Forts module not found.", ephemeral=True)
 
     @discord.ui.button(label="📁 Archive KvK", style=discord.ButtonStyle.secondary, row=2)
     async def archive_kvk(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.admin_cog.finish_kvk(interaction)
+        await self.admin_cog.finish_kvk.callback(self.admin_cog, interaction)
 
     @discord.ui.button(label="🗑️ Delete Season", style=discord.ButtonStyle.danger, row=2)
     async def delete_season(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -708,7 +708,7 @@ class AdminPanelView(discord.ui.View):
 
     @discord.ui.button(label="📦 Backup DB", style=discord.ButtonStyle.secondary, row=3)
     async def backup_db(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.admin_cog.admin_backup(interaction)
+        await self.admin_cog.admin_backup.callback(self.admin_cog, interaction)
 
 
 
