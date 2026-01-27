@@ -98,7 +98,7 @@ class Forts(commands.Cog):
             req_forts = 35
             
             embed.add_field(name="Joined", value=str(joined), inline=True)
-            embed.add_field(name="Launched", value=str(launched), inline=True)
+            embed.add_field(name="Completed", value=str(launched), inline=True)
             embed.add_field(name="Total", value=f"**{total}**", inline=True)
             
             if period == "total":
@@ -231,12 +231,12 @@ class Forts(commands.Cog):
             
             col_name = next((c for c in df.columns if 'governor_name' in c or 'name' in c), None)
             
-            # Try to find joined/launched columns
+            # Try to find joined/completed columns
             # Common names: 'joined', 'is_joined', 'participated'
             col_joined = next((c for c in df.columns if any(x in c for x in ['join', 'participat', 'member'])), None)
             
-            # Common names: 'launched', 'is_captain', 'captain', 'rally_leader', 'creator'
-            col_launched = next((c for c in df.columns if any(x in c for x in ['launch', 'captain', 'leader', 'creat'])), None)
+            # Common names: 'completed', 'launched', 'is_captain', 'captain', 'rally_leader', 'creator'
+            col_launched = next((c for c in df.columns if any(x in c for x in ['complet', 'launch', 'captain', 'leader', 'creat'])), None)
             
             logger.info(f"Mapped columns: ID={col_id}, Name={col_name}, Joined={col_joined}, Launched={col_launched}")
             

@@ -33,7 +33,7 @@ class FortLeaderboardPaginationView(discord.ui.View):
                 player_name = player_name[:17] + "..."
 
             leaderboard_text += f"{medal} **{player_name}**\n"
-            leaderboard_text += f"   🏰 Total: **{player['total_forts']}** | ⚔️ Joined: {player['forts_joined']} | 🚀 Launched: {player['forts_launched']}\n"
+            leaderboard_text += f"   🏰 Total: **{player['total_forts']}** | ⚔️ Joined: {player['forts_joined']} | ✅ Completed: {player['forts_launched']}\n"
             
             if i < start + len(page_data):
                 leaderboard_text += "\n"
