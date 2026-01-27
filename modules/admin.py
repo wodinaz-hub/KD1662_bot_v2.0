@@ -1641,8 +1641,8 @@ class Admin(commands.Cog):
             # Notify about new requirements (optional, but good for transparency)
             if hasattr(self.bot, 'notifications'):
                 await self.bot.notifications.send_announcement(
-                    "📋 Обновление требований КвК! / KvK Requirements Updated!",
-                    f"Администратор обновил требования для сезона **{current_kvk}**.",
+                    "📋 KvK Requirements Updated!",
+                    f"The administrator has updated the requirements for season **{current_kvk}**.",
                     color=discord.Color.blue()
                 )
         else:

@@ -63,17 +63,17 @@ class MyBot(commands.Bot):
             if low_forts:
                 # Group by count for cleaner message
                 low_forts.sort(key=lambda x: x['total_forts'])
-                reminder_text = "⚠️ **Напоминание по фортам / Fort Reminder**\n"
-                reminder_text += "Следующим игрокам нужно поднажать (норма 35):\n"
+                reminder_text = "⚠️ **Fort Participation Reminder**\n"
+                reminder_text += "The following players need to increase their activity (Goal: 35):\n"
                 for p in low_forts[:10]: # Limit to 10 to avoid spam
                     reminder_text += f"• {p['player_name']}: **{p['total_forts']}/35**\n"
                 
                 if len(low_forts) > 10:
-                    reminder_text += f"*...и еще {len(low_forts)-10} игроков.*"
+                    reminder_text += f"*...and {len(low_forts)-10} more players.*"
 
                 if hasattr(self, 'notifications'):
                     await self.notifications.send_announcement(
-                        "🏰 Контроль фортов / Fort Compliance",
+                        "🏰 Fort Compliance Check",
                         reminder_text,
                         color=discord.Color.orange()
                     )
@@ -112,14 +112,14 @@ class MyBot(commands.Bot):
         deaths_text = "\n".join([f"• {p['player_name']}: **{p['total_deaths']:,}**" for p in top_deaths])
 
         fields = {
-            "⚔️ Топ по киллам / Top KP": kp_text,
-            "💀 Топ по смертям / Top Deaths": deaths_text
+            "⚔️ Top KP": kp_text,
+            "💀 Top Deaths": deaths_text
         }
 
         if hasattr(self, 'notifications'):
             await self.notifications.send_announcement(
-                "📈 Еженедельный отчет КвК / Weekly KvK Report",
-                f"Итоги активности в сезоне **{current_kvk}** за прошедшую неделю.",
+                "📈 Weekly KvK Report",
+                f"Activity summary for season **{current_kvk}** for the past week.",
                 color=discord.Color.gold(),
                 fields=fields
             )

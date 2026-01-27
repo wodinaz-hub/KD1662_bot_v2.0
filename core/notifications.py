@@ -38,13 +38,13 @@ class NotificationManager:
     async def notify_new_fort_data(self, season, period_name):
         """Specific notification for new fort data upload."""
         fields = {
-            "Сезон / Season": season,
-            "Период / Period": period_name,
-            "Действие / Action": "Используйте `/my_forts` для проверки своей статистики."
+            "Season": season,
+            "Period": period_name,
+            "Action": "Use `/my_forts` to check your stats."
         }
         await self.send_announcement(
-            "🏰 Новые данные по фортам! / New Fort Data!",
-            "Администратор загрузил свежую статистику по фортам.",
+            "🏰 New Fort Data!",
+            "The administrator has uploaded fresh fort statistics.",
             color=discord.Color.orange(),
             fields=fields
         )
@@ -52,14 +52,14 @@ class NotificationManager:
     async def notify_new_stats_data(self, season, period_name, snapshot_type):
         """Specific notification for new KvK stats upload."""
         fields = {
-            "Сезон / Season": season,
-            "Период / Period": period_name,
-            "Тип / Type": snapshot_type.capitalize(),
-            "Действие / Action": "Используйте `/my_stats` для проверки своего прогресса."
+            "Season": season,
+            "Period": period_name,
+            "Type": snapshot_type.capitalize(),
+            "Action": "Use `/my_stats` to check your progress."
         }
         await self.send_announcement(
-            "📊 Обновление статистики КвК! / KvK Stats Updated!",
-            "Загружены новые данные по убийствам и смертям.",
+            "📊 KvK Stats Updated!",
+            "New kill and death data has been uploaded.",
             color=discord.Color.green(),
             fields=fields
         )

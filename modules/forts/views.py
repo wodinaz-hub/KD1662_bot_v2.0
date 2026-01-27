@@ -86,7 +86,7 @@ class FortStatsView(discord.ui.View):
                     default=(s == self.selected_season)
                 ) for s in seasons[:25]
             ]
-            season_select = discord.ui.Select(placeholder="Выберите сезон...", options=season_options, row=0)
+            season_select = discord.ui.Select(placeholder="Select season...", options=season_options, row=0)
             season_select.callback = self.season_callback
             self.add_item(season_select)
             
@@ -94,7 +94,7 @@ class FortStatsView(discord.ui.View):
         periods = db_manager.get_fort_periods(self.selected_season)
         period_options = [
             discord.SelectOption(
-                label="📊 Итого за сезон (Total)", 
+                label="📊 Season Total", 
                 value="total", 
                 default=(self.selected_period == "total")
             )
@@ -108,7 +108,7 @@ class FortStatsView(discord.ui.View):
                 )
             )
         
-        period_select = discord.ui.Select(placeholder="Выберите период...", options=period_options, row=1)
+        period_select = discord.ui.Select(placeholder="Select period...", options=period_options, row=1)
         period_select.callback = self.period_callback
         self.add_item(period_select)
 
