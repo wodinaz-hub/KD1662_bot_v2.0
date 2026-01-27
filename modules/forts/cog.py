@@ -16,7 +16,7 @@ logger = logging.getLogger('forts_commands')
 class Forts(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.fort_channel_id = 1368845134791184484
+        self.fort_channel_id = int(os.getenv('FORT_STATS_CHANNEL_ID', 1368845134791184484))
         self.admin_role_ids = []
         
         # Load multiple admin role IDs from environment variables (comma-separated)
@@ -334,6 +334,9 @@ class Forts(commands.Cog):
                 
             if db_manager.import_fort_stats(stats_list, period_name):
                 await interaction.followup.send(f"✅ Successfully imported stats for {len(stats_list)} players into period **{period_name}**!")
+                # Notify about new data
+                if hasattr(self.bot, 'notifications'):
+                    await self.bot.notifications.notify_new_fort_data(target_season, period_name)
             else:
                 await interaction.followup.send("❌ Database error.")
                 
@@ -391,6 +394,9 @@ class Forts(commands.Cog):
             
         if db_manager.import_fort_stats(stats_list, period_name):
             await ctx.send(f"✅ Successfully imported stats for {len(stats_list)} players into period **{period_name}**!")
+            # Notify about new data
+            if hasattr(self.bot, 'notifications'):
+                await self.bot.notifications.notify_new_fort_data(target_season, period_name)
         else:
             await ctx.send("❌ Database error.")
 
@@ -549,6 +555,9 @@ class Forts(commands.Cog):
         # Save to DB
         if db_manager.import_fort_stats(stats_list, period_name):
             await interaction.followup.send(f"✅ Successfully processed {processed_files} files. Updated stats for {len(stats_list)} players in period **{period_name}**.")
+            # Notify about new data
+            if hasattr(self.bot, 'notifications'):
+                await self.bot.notifications.notify_new_fort_data(target_season, period_name)
         else:
             await interaction.followup.send("❌ Error saving stats to database.")
 

@@ -1638,6 +1638,13 @@ class Admin(commands.Cog):
         
         if success:
             await msg.edit(content=f"✅ Requirements for '{current_kvk}' uploaded successfully!")
+            # Notify about new requirements (optional, but good for transparency)
+            if hasattr(self.bot, 'notifications'):
+                await self.bot.notifications.send_announcement(
+                    "📋 Обновление требований КвК! / KvK Requirements Updated!",
+                    f"Администратор обновил требования для сезона **{current_kvk}**.",
+                    color=discord.Color.blue()
+                )
         else:
             await msg.edit(content="❌ Failed to import requirements.\n\n**Expected columns:**\n• `min power`\n• `max power`\n• `required kills` (T4+T5)\n• `required death` or `required deaths`")
 
@@ -1730,6 +1737,9 @@ class Admin(commands.Cog):
         
         if success:
             await msg.edit(content=f"✅ Snapshot '{snapshot_type}' for period '{period_name}' uploaded successfully!")
+            # Notify about new data
+            if hasattr(self.bot, 'notifications'):
+                await self.bot.notifications.notify_new_stats_data(current_kvk, period_name, snapshot_type)
         else:
             await msg.edit(content="❌ Failed to import snapshot. Check that your Excel file has the correct columns.")
 
