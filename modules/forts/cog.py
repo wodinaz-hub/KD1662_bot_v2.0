@@ -75,6 +75,7 @@ class Forts(commands.Cog):
         embed = discord.Embed(title=f"🏰 Fort Statistics: {player_name}", color=discord.Color.dark_orange())
         embed.description = f"Season: **{current_kvk}**\nPeriod: **{period_label}**"
         
+        file = None
         if stats:
             joined = stats['forts_joined']
             launched = stats['forts_launched']
@@ -97,7 +98,6 @@ class Forts(commands.Cog):
                 
             # Add History/Dynamics
             history = db_manager.get_player_fort_stats_history(player_id, current_kvk)
-            file = None
             if history and len(history) > 1:
                 history_text = ""
                 for h in history:
