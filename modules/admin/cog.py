@@ -495,7 +495,9 @@ class Admin(commands.Cog):
 
     @commands.command(name="upload_requirements")
     async def msg_upload_requirements(self, ctx: commands.Context):
-        if not self.is_admin_ctx(ctx): return
+        if not self.is_admin_ctx(ctx):
+            await ctx.send("❌ You do not have permissions to use this command.")
+            return
         if not ctx.message.attachments: return
         attachment = ctx.message.attachments[0]
         current_kvk = db_manager.get_current_kvk_name()
@@ -508,7 +510,9 @@ class Admin(commands.Cog):
 
     @commands.command(name="upload_players")
     async def msg_upload_players(self, ctx: commands.Context):
-        if not self.is_admin_ctx(ctx): return
+        if not self.is_admin_ctx(ctx):
+            await ctx.send("❌ You do not have permissions to use this command.")
+            return
         if not ctx.message.attachments: return
         attachment = ctx.message.attachments[0]
         current_kvk = db_manager.get_current_kvk_name()
@@ -521,7 +525,9 @@ class Admin(commands.Cog):
 
     @commands.command(name="upload_snapshot")
     async def msg_upload_snapshot(self, ctx: commands.Context, period_name: str, snapshot_type: str):
-        if not self.is_admin_ctx(ctx): return
+        if not self.is_admin_ctx(ctx):
+            await ctx.send("❌ You do not have permissions to use this command.")
+            return
         if not ctx.message.attachments: return
         attachment = ctx.message.attachments[0]
         current_kvk = db_manager.get_current_kvk_name()
@@ -534,5 +540,7 @@ class Admin(commands.Cog):
 
     @commands.command(name="export_db")
     async def msg_export_db(self, ctx: commands.Context):
-        if not self.is_admin_ctx(ctx): return
+        if not self.is_admin_ctx(ctx):
+            await ctx.send("❌ You do not have permissions to use this command.")
+            return
         await ctx.send(file=discord.File(db_manager.DATABASE_PATH, filename="kvk_data_backup.db"))

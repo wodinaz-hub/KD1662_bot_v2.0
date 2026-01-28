@@ -331,13 +331,13 @@ class UnifiedStatsView(discord.ui.View):
                 btn = discord.ui.Button(label=label, style=style, row=2)
                 
                 # Create a closure for the callback
-                async def make_callback(p_id):
+                def make_callback(p_id):
                     async def callback(interaction: discord.Interaction):
                         self.selected_player_id = p_id
                         await self.update_message(interaction)
                     return callback
                 
-                btn.callback = await make_callback(acc['player_id'])
+                btn.callback = make_callback(acc['player_id'])
                 self.add_item(btn)
 
     async def season_callback(self, interaction: discord.Interaction):

@@ -433,7 +433,7 @@ class AdminPanelView(discord.ui.View):
 
     @discord.ui.button(label="📥 Upload Snapshot", style=discord.ButtonStyle.success, row=1)
     async def upload_snapshot(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("To upload a snapshot, use the command: `/upload_snapshot`", ephemeral=True)
+        await interaction.response.send_message("To upload a snapshot, use the message command: `!upload_snapshot [period_name] [start/end]` and attach the file.", ephemeral=True)
 
     @discord.ui.button(label="🏰 Fort Upload", style=discord.ButtonStyle.success, row=1)
     async def fort_upload(self, interaction: discord.Interaction, button: discord.ui.Button):
