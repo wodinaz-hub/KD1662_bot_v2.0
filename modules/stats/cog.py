@@ -133,14 +133,19 @@ class Stats(commands.Cog):
         # Use season_override if provided, otherwise use current KvK
         target_kvk = season_override if season_override else db_manager.get_current_kvk_name()
         
-        if not target_kvk:
-            msg = "No active KvK is currently set. Please ask an administrator to set it."
-            if interaction.response.is_done():
-                await interaction.followup.send(msg, ephemeral=False)
+        # Fallback to most recent season if current is not set
+        if not target_kvk or target_kvk == "Not set":
+            seasons = db_manager.get_all_seasons()
+            if seasons:
+                target_kvk = seasons[0]['value']
             else:
-                await interaction.response.send_message(msg, ephemeral=False)
-            await self.log_to_channel(interaction, "Command Failed", "Command: /my_stats\nReason: No active KvK")
-            return
+                msg = "No KvK seasons are currently available. Please ask an administrator to set them up."
+                if interaction.response.is_done():
+                    await interaction.followup.send(msg, ephemeral=False)
+                else:
+                    await interaction.response.send_message(msg, ephemeral=False)
+                await self.log_to_channel(interaction, "Command Failed", "Command: /my_stats\nReason: No seasons found")
+                return
 
         # Use main account by default for the initial view
         player_id = accounts[0]['player_id']
@@ -167,13 +172,18 @@ class Stats(commands.Cog):
         if not kvk_name:
             kvk_name = db_manager.get_current_kvk_name()
             
-        if not kvk_name:
-            msg = "No active KvK is currently set."
-            if interaction.response.is_done():
-                await interaction.followup.send(msg, ephemeral=False)
+        # Fallback to most recent season if current is not set
+        if not kvk_name or kvk_name == "Not set":
+            seasons = db_manager.get_all_seasons()
+            if seasons:
+                kvk_name = seasons[0]['value']
             else:
-                await interaction.response.send_message(msg, ephemeral=False)
-            return
+                msg = "No KvK seasons are currently available."
+                if interaction.response.is_done():
+                    await interaction.followup.send(msg, ephemeral=False)
+                else:
+                    await interaction.response.send_message(msg, ephemeral=False)
+                return
 
         stats = db_manager.get_kingdom_stats_by_period(kvk_name, period_key)
         if not stats or not stats['player_count']:
