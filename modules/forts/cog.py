@@ -11,7 +11,7 @@ from database import database_manager as db_manager
 from core import graphics
 from .views import FortLeaderboardPaginationView
 
-logger = logging.getLogger('forts_commands')
+logger = logging.getLogger('discord_bot.forts')
 
 class Forts(commands.Cog):
     def __init__(self, bot):

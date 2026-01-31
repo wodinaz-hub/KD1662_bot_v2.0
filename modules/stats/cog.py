@@ -13,7 +13,7 @@ from .views import *
 from .helpers import add_stats_fields, format_period_label
 
 # Logging configuration
-logger = logging.getLogger('stats_commands')
+logger = logging.getLogger('discord_bot.stats')
 
 
 class Stats(commands.Cog):

@@ -14,7 +14,7 @@ from .views import (
 )
 from .modals import RequirementsModal, GlobalRequirementsModal
 
-logger = logging.getLogger('discord_bot.admin.cog')
+logger = logging.getLogger('discord_bot.admin')
 
 class Admin(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -114,7 +114,7 @@ class Admin(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def admin_panel(self, interaction: discord.Interaction):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("❌ You do not have permissions.", ephemeral=True)
+            await interaction.response.send_message("❌ You do not have permissions.", ephemeral=False)
             return
 
         embed = discord.Embed(
@@ -176,14 +176,14 @@ class Admin(commands.Cog):
         if not self.is_admin(interaction):
             await interaction.response.send_message("You do not have permissions.", ephemeral=False)
             return
-        await interaction.response.send_message("Select the active KvK season:", view=KvKSelectView(interaction, self), ephemeral=True)
+        await interaction.response.send_message("Select the active KvK season:", view=KvKSelectView(interaction, self), ephemeral=False)
 
     @app_commands.command(name="set_kvk_dates", description="Set start and end dates for a KvK season.")
     @app_commands.describe(kvk_name="The KvK season name (e.g. kvk1)", start_date="YYYY-MM-DD", end_date="YYYY-MM-DD")
     @app_commands.default_permissions(administrator=True)
     async def set_kvk_dates(self, interaction: discord.Interaction, kvk_name: str, start_date: str, end_date: str):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions.", ephemeral=False)
             return
 
         try:
@@ -191,39 +191,39 @@ class Admin(commands.Cog):
             datetime.strptime(start_date, "%Y-%m-%d")
             datetime.strptime(end_date, "%Y-%m-%d")
         except ValueError:
-            await interaction.response.send_message("❌ Invalid date format. Use YYYY-MM-DD.", ephemeral=True)
+            await interaction.response.send_message("❌ Invalid date format. Use YYYY-MM-DD.", ephemeral=False)
             return
 
         if db_manager.set_kvk_dates(kvk_name, start_date, end_date):
             await interaction.response.send_message(f"✅ Dates for **{kvk_name}** updated: {start_date} to {end_date}.", ephemeral=False)
             await self.log_to_channel(interaction, "Set KvK Dates", f"KvK: {kvk_name}\nStart: {start_date}\nEnd: {end_date}")
         else:
-            await interaction.response.send_message(f"❌ Failed to set dates.", ephemeral=True)
+            await interaction.response.send_message(f"❌ Failed to set dates.", ephemeral=False)
 
     @app_commands.command(name="admin_cleanup_players", description="View and delete player data.")
     @app_commands.describe(player_id="The player ID to delete")
     @app_commands.default_permissions(administrator=True)
     async def admin_cleanup_players(self, interaction: discord.Interaction, player_id: str = None):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions.", ephemeral=False)
             return
 
         if not player_id:
-            await interaction.response.send_message("Use `/admin_cleanup_players player_id:12345` to delete a player.", ephemeral=True)
+            await interaction.response.send_message("Use `/admin_cleanup_players player_id:12345` to delete a player.", ephemeral=False)
             return
 
         try: pid = int(player_id)
         except ValueError:
-            await interaction.response.send_message("❌ Invalid Player ID.", ephemeral=True)
+            await interaction.response.send_message("❌ Invalid Player ID.", ephemeral=False)
             return
 
-        await interaction.response.send_message(f"⚠️ Are you sure you want to delete ALL data for player ID `{pid}`?", view=DeletePlayerConfirmView(pid, self), ephemeral=True)
+        await interaction.response.send_message(f"⚠️ Are you sure you want to delete ALL data for player ID `{pid}`?", view=DeletePlayerConfirmView(pid, self), ephemeral=False)
 
     @app_commands.command(name="set_global_requirements", description="Set global requirements for 'Total Stats' view.")
     @app_commands.default_permissions(administrator=True)
     async def set_global_requirements(self, interaction: discord.Interaction):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions.", ephemeral=False)
             return
         await interaction.response.send_modal(GlobalRequirementsModal(self))
 
@@ -425,9 +425,9 @@ class Admin(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def admin_clear_forts(self, interaction: discord.Interaction):
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions.", ephemeral=False)
             return
-        await interaction.response.send_message("⚠️ Clear all fort data?", view=ClearFortsConfirmView(self), ephemeral=True)
+        await interaction.response.send_message("⚠️ Clear all fort data?", view=ClearFortsConfirmView(self), ephemeral=False)
 
     @app_commands.command(name="kvk_setup", description="🧙‍♂️ Guided wizard.")
     @app_commands.default_permissions(administrator=True)
