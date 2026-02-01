@@ -498,7 +498,18 @@ class Admin(commands.Cog):
 
     @dkp_leaderboard.autocomplete('season')
     async def season_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        seasons = db_manager.get_all_seasons()
+        # Use get_played_seasons to exclude templates
+        from database import database_manager as db_manager # Ensure import
+        # Note: database_manager proxy needs to expose get_played_seasons. 
+        # Since database_manager imports * from .kvk, it should work if __all__ or wildcards are correct.
+        # Assuming db_manager has it now.
+        
+        # We need to fetch via db_manager which proxies to kvk.py
+        seasons = db_manager.get_played_seasons()
+        
+        # Also include 'Current' if there is one active? 
+        # The list already has active and archived.
+        
         return [app_commands.Choice(name=s['label'], value=s['value']) for s in seasons if current.lower() in s['label'].lower()][:25]
 
     @commands.command(name="upload_requirements")

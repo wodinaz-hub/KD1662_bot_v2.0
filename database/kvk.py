@@ -258,6 +258,20 @@ def get_all_seasons():
             return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
         logger.error(f"Error getting all seasons: {e}")
+    except Exception as e:
+        logger.error(f"Error getting all seasons: {e}")
+        return []
+
+def get_played_seasons():
+    """Returns only active or archived KvK seasons (excluding templates)."""
+    try:
+        with closing(get_connection()) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM kvk_seasons WHERE is_active = 1 OR is_archived = 1 ORDER BY is_active DESC, value DESC")
+            return [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error getting played seasons: {e}")
         return []
 
 def delete_kvk_season(kvk_name: str):
