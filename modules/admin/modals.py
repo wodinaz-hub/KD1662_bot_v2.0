@@ -180,7 +180,7 @@ class GlobalRequirementsModal(discord.ui.Modal, title="Set Global Stats Requirem
         parsed_reqs = dummy_modal.parse_requirements(text)
         
         if not parsed_reqs:
-            await interaction.response.send_message("❌ Could not parse requirements.", ephemeral=True)
+            await interaction.response.send_message("❌ Could not parse requirements.", ephemeral=False)
             return
 
         import json
@@ -190,4 +190,4 @@ class GlobalRequirementsModal(discord.ui.Modal, title="Set Global Stats Requirem
             await interaction.response.send_message(f"✅ Global requirements updated ({len(parsed_reqs)} brackets).", ephemeral=False)
             await self.admin_cog.log_to_channel(interaction, "Set Global Requirements", f"Brackets: {len(parsed_reqs)}")
         else:
-            await interaction.response.send_message("❌ Database error.", ephemeral=True)
+            await interaction.response.send_message("❌ Database error.", ephemeral=False)

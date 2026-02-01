@@ -185,7 +185,7 @@ class Forts(commands.Cog):
     async def fort_downloads(self, interaction: discord.Interaction, start_date: str, end_date: str, period_name: str = "Total", season: str = None):
         # Check admin
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions.", ephemeral=False)
             return
 
         await interaction.response.defer(ephemeral=False)
@@ -282,7 +282,7 @@ class Forts(commands.Cog):
     async def fort_wait(self, interaction: discord.Interaction, period_name: str = "Total", season: str = None):
         # Check admin
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions.", ephemeral=False)
             return
 
         target_season = season if season else (db_manager.get_current_kvk_name() or "General")
@@ -418,7 +418,7 @@ class Forts(commands.Cog):
     async def fort_downloads_auto(self, interaction: discord.Interaction, start_date: str = None, end_date: str = None, period_name: str = "Total", season: str = None):
         # Check admin
         if not self.is_admin(interaction):
-            await interaction.response.send_message("You do not have permissions.", ephemeral=True)
+            await interaction.response.send_message("You do not have permissions.", ephemeral=False)
             return
 
         await interaction.response.defer(ephemeral=False)

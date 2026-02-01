@@ -433,13 +433,13 @@ class AdminPanelView(discord.ui.View):
 
     @discord.ui.button(label="📥 Upload Snapshot", style=discord.ButtonStyle.success, row=1)
     async def upload_snapshot(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("To upload a snapshot, use the message command: `!upload_snapshot [period_name] [start/end]` and attach the file.", ephemeral=True)
+        await interaction.response.send_message("To upload a snapshot, use the message command: `!upload_snapshot [period_name] [start/end]` and attach the file.", ephemeral=False)
 
     @discord.ui.button(label="🏰 Fort Upload", style=discord.ButtonStyle.success, row=1)
     async def fort_upload(self, interaction: discord.Interaction, button: discord.ui.Button):
         forts_cog = interaction.client.get_cog("Forts")
         if forts_cog: await forts_cog.fort_wait.callback(forts_cog, interaction)
-        else: await interaction.response.send_message("❌ Forts module not found.", ephemeral=True)
+        else: await interaction.response.send_message("❌ Forts module not found.", ephemeral=False)
 
     @discord.ui.button(label="📁 Archive KvK", style=discord.ButtonStyle.secondary, row=2)
     async def archive_kvk(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -447,7 +447,7 @@ class AdminPanelView(discord.ui.View):
 
     @discord.ui.button(label="🗑️ Delete Season", style=discord.ButtonStyle.danger, row=2)
     async def delete_season(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("To delete a season, use: `/delete_kvk_season season:NAME`", ephemeral=True)
+        await interaction.response.send_message("To delete a season, use: `/delete_kvk_season season:NAME`", ephemeral=False)
 
     @discord.ui.button(label="📦 Backup DB", style=discord.ButtonStyle.secondary, row=3)
     async def backup_db(self, interaction: discord.Interaction, button: discord.ui.Button):
