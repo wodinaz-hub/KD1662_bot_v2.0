@@ -179,7 +179,7 @@ class Admin(commands.Cog):
         await interaction.response.send_message("Select the active KvK season:", view=KvKSelectView(interaction, self), ephemeral=False)
 
     @app_commands.command(name="set_kvk_dates", description="Set start and end dates for a KvK season.")
-    @app_commands.describe(kvk_name="The KvK season name (e.g. kvk1)", start_date="YYYY-MM-DD", end_date="YYYY-MM-DD")
+    @app_commands.describe(kvk_name="Select the KvK season", start_date="YYYY-MM-DD", end_date="YYYY-MM-DD")
     @app_commands.default_permissions(administrator=True)
     async def set_kvk_dates(self, interaction: discord.Interaction, kvk_name: str, start_date: str, end_date: str):
         if not self.is_admin(interaction):
@@ -198,7 +198,12 @@ class Admin(commands.Cog):
             await interaction.response.send_message(f"✅ Dates for **{kvk_name}** updated: {start_date} to {end_date}.", ephemeral=False)
             await self.log_to_channel(interaction, "Set KvK Dates", f"KvK: {kvk_name}\nStart: {start_date}\nEnd: {end_date}")
         else:
-            await interaction.response.send_message(f"❌ Failed to set dates.", ephemeral=False)
+            await interaction.response.send_message(f"❌ Failed to set dates. Season `{kvk_name}` not found.", ephemeral=False)
+
+    @set_kvk_dates.autocomplete('kvk_name')
+    async def set_kvk_dates_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        seasons = db_manager.get_played_seasons()
+        return [app_commands.Choice(name=s['label'], value=s['value']) for s in seasons if current.lower() in s['label'].lower()][:25]
 
     @app_commands.command(name="admin_cleanup_players", description="View and delete player data.")
     @app_commands.describe(player_id="The player ID to delete")
