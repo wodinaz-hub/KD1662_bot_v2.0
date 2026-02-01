@@ -18,6 +18,18 @@ def log_admin_action(admin_id: int, admin_name: str, action: str, details: str):
     except Exception as e:
         logger.error(f"Error logging admin action: {e}")
 
+def get_all_admin_logs():
+    """Retrieves all admin logs."""
+    try:
+        with closing(get_connection()) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM admin_logs ORDER BY timestamp DESC")
+            return [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error getting admin logs: {e}")
+        return []
+
 def set_reward_role(role_id: int):
     """Sets the reward role ID in the database."""
     try:
@@ -142,31 +154,4 @@ def set_dkp_formula(t4: int, t5: int, deaths: int):
         logger.error(f"Error setting DKP formula: {e}")
         return False
 
-def get_dkp_formula():
-    """Gets the DKP formula weights from the database."""
-    try:
-        with closing(get_connection()) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT setting_value FROM kvk_settings WHERE setting_key = 'dkp_formula'")
-            row = cursor.fetchone()
-            if row:
-                import json
-                return json.loads(row[0])
-            return {"t4": 4, "t5": 10, "deaths": 15} # Default
-    except Exception as e:
-        logger.error(f"Error getting DKP formula: {e}")
-        return {"t4": 4, "t5": 10, "deaths": 15}
 
-def set_dkp_formula(t4: int, t5: int, deaths: int):
-    """Sets the DKP formula weights."""
-    try:
-        import json
-        value = json.dumps({"t4": t4, "t5": t5, "deaths": deaths})
-        with closing(get_connection()) as conn:
-            cursor = conn.cursor()
-            cursor.execute("INSERT OR REPLACE INTO kvk_settings (setting_key, setting_value) VALUES ('dkp_formula', ?)", (value,))
-            conn.commit()
-        return True
-    except Exception as e:
-        logger.error(f"Error setting DKP formula: {e}")
-        return False

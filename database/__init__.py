@@ -31,7 +31,9 @@ from .kvk import (
     get_player_rank,
     get_player_stats,
     get_total_player_stats,
-    get_kingdom_stats
+    get_kingdom_stats,
+    get_played_seasons,
+    delete_snapshot
 )
 from .forts import (
     import_fort_stats,
@@ -40,7 +42,8 @@ from .forts import (
     get_fort_leaderboard,
     get_fort_seasons,
     get_fort_stats,
-    clear_all_fort_data
+    clear_all_fort_data,
+    delete_fort_period
 )
 from .players import (
     import_kingdom_players,
@@ -50,7 +53,8 @@ from .players import (
     link_account,
     get_linked_accounts,
     get_all_linked_accounts_full,
-    unlink_account
+    unlink_account,
+    add_new_player
 )
 from .admin import (
     log_admin_action,
@@ -60,5 +64,8 @@ from .admin import (
     set_global_requirements,
     reset_all_data,
     set_last_updated,
-    get_last_updated
+    get_last_updated,
+    get_dkp_formula,
+    set_dkp_formula,
+    get_all_admin_logs
 )
