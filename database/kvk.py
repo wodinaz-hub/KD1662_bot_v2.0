@@ -600,6 +600,23 @@ def get_player_rank(player_id: int, kvk_name: str):
         logger.error(f"Error getting player rank: {e}")
         return None
 
+def get_player_stats_history(player_id: int, kvk_name: str):
+    """Returns player stats history across all periods."""
+    try:
+        with closing(get_connection()) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT period_key, kill_points, deaths, power
+                FROM kvk_stats
+                WHERE player_id = ? AND kvk_name = ?
+                ORDER BY period_key ASC
+            ''', (player_id, kvk_name))
+            return [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error getting player stats history: {e}")
+        return []
+
 def get_player_stats(player_id: int, kvk_name: str, period_key: str):
     """Retrieves player statistics by ID for a specific KvK and period."""
     try:

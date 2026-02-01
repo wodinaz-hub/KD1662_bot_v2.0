@@ -32,6 +32,7 @@ from .kvk import (
     get_snapshot_player_data,
     get_player_rank,
     get_player_stats,
+    get_player_stats_history,
     get_total_player_stats,
     get_kingdom_stats,
     get_played_seasons,
