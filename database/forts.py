@@ -158,3 +158,27 @@ def clear_all_fort_data():
     except sqlite3.Error as e:
         logger.error(f"Error clearing fort data: {e}")
         return False
+        return False
+
+def delete_fort_period(kvk_name: str, period_key: str):
+    """Deletes all fort data for a specific period."""
+    try:
+        with closing(get_connection()) as conn:
+            cursor = conn.cursor()
+            # Delete stats
+            cursor.execute('''
+                DELETE FROM fort_stats 
+                WHERE kvk_name = ? AND period_key = ?
+            ''', (kvk_name, period_key))
+            
+            # Delete period definition
+            cursor.execute('''
+                DELETE FROM fort_periods 
+                WHERE kvk_name = ? AND period_key = ?
+            ''', (kvk_name, period_key))
+            
+            conn.commit()
+            return True
+    except Exception as e:
+        logger.error(f"Error deleting fort period: {e}")
+        return False

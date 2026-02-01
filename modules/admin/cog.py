@@ -390,11 +390,15 @@ class Admin(commands.Cog):
         if not all_stats:
             await interaction.followup.send("No stats.")
             return
+            
+        formula = db_manager.get_dkp_formula()
+        t4_w, t5_w, death_w = formula.get('t4', 4), formula.get('t5', 10), formula.get('deaths', 15)
+        
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(['ID', 'Name', 'Power', 'KP', 'Deaths', 'T4', 'T5', 'DKP'])
+        writer.writerow(['ID', 'Name', 'Power', 'KP', 'Deaths', 'T4', 'T5', f'DKP (T4x{t4_w} T5x{t5_w} Dx{death_w})'])
         for s in all_stats:
-            dkp = (s.get('total_t4_kills',0)*4) + (s.get('total_t5_kills',0)*10) + (s.get('total_deaths',0)*15)
+            dkp = (s.get('total_t4_kills',0)*t4_w) + (s.get('total_t5_kills',0)*t5_w) + (s.get('total_deaths',0)*death_w)
             writer.writerow([s['player_id'], s['player_name'], s['total_power'], s['total_kill_points'], s['total_deaths'], s['total_t4_kills'], s['total_t5_kills'], dkp])
         output.seek(0)
         file = discord.File(io.BytesIO(output.getvalue().encode()), filename=f"leaderboard_{current_kvk}.csv")
@@ -480,11 +484,15 @@ class Admin(commands.Cog):
             await interaction.followup.send("No stats.")
             return
         player_dkp = []
+        formula = db_manager.get_dkp_formula()
+        t4_w, t5_w, death_w = formula.get('t4', 4), formula.get('t5', 10), formula.get('deaths', 15)
+        
         for s in all_stats:
             t4, t5, d = s.get('total_t4_kills',0) or 0, s.get('total_t5_kills',0) or 0, s.get('total_deaths',0) or 0
-            player_dkp.append({'player_id': s['player_id'], 'player_name': s['player_name'], 'power': s.get('total_power',0), 't4': t4, 't5': t5, 'deaths': d, 'dkp': (t4*4)+(t5*10)+(d*15)})
+            dkp = (t4 * t4_w) + (t5 * t5_w) + (d * death_w)
+            player_dkp.append({'player_id': s['player_id'], 'player_name': s['player_name'], 'power': s.get('total_power',0), 't4': t4, 't5': t5, 'deaths': d, 'dkp': dkp})
         player_dkp.sort(key=lambda x: x['dkp'], reverse=True)
-        view = LeaderboardPaginationView(player_dkp, "🏆 DKP Leaderboard", target)
+        view = LeaderboardPaginationView(player_dkp, f"🏆 DKP Leaderboard (T4x{t4_w} T5x{t5_w} Dx{death_w})", target)
         view.update_buttons()
         await interaction.followup.send(embed=view.create_embed(), view=view)
 
@@ -544,3 +552,106 @@ class Admin(commands.Cog):
             await ctx.send("❌ You do not have permissions to use this command.")
             return
         await ctx.send(file=discord.File(db_manager.DATABASE_PATH, filename="kvk_data_backup.db"))
+
+    @app_commands.command(name="set_dkp_formula", description="Configure DKP formula weights.")
+    @app_commands.describe(t4="Points per T4 kill", t5="Points per T5 kill", deaths="Points per death")
+    @app_commands.default_permissions(administrator=True)
+    async def set_dkp_formula(self, interaction: discord.Interaction, t4: int, t5: int, deaths: int):
+        if not self.is_admin(interaction):
+            await interaction.response.send_message("❌ You do not have permissions.", ephemeral=False)
+            return
+        
+        if db_manager.set_dkp_formula(t4, t5, deaths):
+            await interaction.response.send_message(f"✅ DKP Formula Updated:\n**T4:** {t4}\n**T5:** {t5}\n**Deaths:** {deaths}", ephemeral=False)
+            await self.log_to_channel(interaction, "Set DKP Formula", f"T4: {t4}, T5: {t5}, Deaths: {deaths}")
+        else:
+            await interaction.response.send_message("❌ Failed to update DKP formula.", ephemeral=False)
+
+    @app_commands.command(name="add_player", description="Manually add or update a player.")
+    @app_commands.describe(player_id="Game ID", name="Governor Name", power="Current Power")
+    @app_commands.default_permissions(administrator=True)
+    async def add_player(self, interaction: discord.Interaction, player_id: str, name: str, power: str):
+        if not self.is_admin(interaction):
+            await interaction.response.send_message("❌ You do not have permissions.", ephemeral=False)
+            return
+        
+        try:
+            pid = int(player_id)
+            pwr = int(power)
+            
+            # Helper to determine current KvK
+            kvk = db_manager.get_current_kvk_name() or "General"
+            
+            if db_manager.add_new_player(pid, name, pwr, kvk):
+                await interaction.response.send_message(f"✅ Player **{name}** ({pid}) added/updated with {pwr} power in **{kvk}**.", ephemeral=False)
+                await self.log_to_channel(interaction, "Add Player", f"ID: {pid}, Name: {name}, Power: {pwr}")
+            else:
+                await interaction.response.send_message("❌ Failed to add player.", ephemeral=False)
+        except ValueError:
+            await interaction.response.send_message("❌ ID and Power must be numbers.", ephemeral=False)
+
+    @app_commands.command(name="list_players", description="List top players by power.")
+    @app_commands.describe(limit="Number of players to show (default 20)")
+    async def list_players(self, interaction: discord.Interaction, limit: int = 20):
+        await interaction.response.defer()
+        kvk = db_manager.get_current_kvk_name()
+        players = db_manager.get_all_kingdom_players(kvk) if kvk else []
+        
+        if not players:
+            await interaction.followup.send("No players found for current season.")
+            return
+
+        # Sort by power descending
+        players.sort(key=lambda x: x.get('power', 0), reverse=True)
+        top = players[:limit]
+        
+        text = f"**Top {len(top)} Players (Power)**\n"
+        for i, p in enumerate(top, 1):
+             text += f"{i}. **{p['player_name']}** ({p['player_id']}) - ⚡ {p['power']:,}\n"
+             
+        # Split if too long
+        if len(text) > 2000:
+            text = text[:1900] + "\n...(truncated)"
+            
+        await interaction.followup.send(text)
+        await interaction.followup.send(text)
+
+    @app_commands.command(name="delete_snapshot", description="⚠️ Delete a specific snapshot batch.")
+    @app_commands.describe(period="Period key (e.g. week_1)", type="start or end", kvk="Optional KvK name")
+    @app_commands.default_permissions(administrator=True)
+    async def delete_snapshot(self, interaction: discord.Interaction, period: str, type: str, kvk: str = None):
+        if not self.is_admin(interaction):
+            await interaction.response.send_message("❌ Permissions denied.", ephemeral=False)
+            return
+        
+        target_kvk = kvk or db_manager.get_current_kvk_name()
+        type = type.lower()
+        if type not in ['start', 'end']:
+            await interaction.response.send_message("❌ Type must be 'start' or 'end'.", ephemeral=False)
+            return
+
+        from db_manager import kvk as kvk_db # Direct import since it's added recently? or via database_manager
+        # database_manager is a proxy, need to ensure it exposes delete_snapshot.
+        # Actually database_manager.py imports * from .kvk, so it should be there.
+        
+        if db_manager.delete_snapshot(target_kvk, period, type):
+            await interaction.response.send_message(f"✅ Deleted **{type}** snapshot for **{period}** in **{target_kvk}**.", ephemeral=False)
+            await self.log_to_channel(interaction, "Delete Snapshot", f"KvK: {target_kvk}, Period: {period}, Type: {type}")
+        else:
+            await interaction.response.send_message("❌ Failed to delete snapshot (or none found).", ephemeral=False)
+
+    @app_commands.command(name="delete_fort_period", description="⚠️ Delete fort stats for a specific period.")
+    @app_commands.describe(period="Period key (e.g. week_1)", kvk="Optional KvK name")
+    @app_commands.default_permissions(administrator=True)
+    async def delete_fort_period(self, interaction: discord.Interaction, period: str, kvk: str = None):
+        if not self.is_admin(interaction):
+            await interaction.response.send_message("❌ Permissions denied.", ephemeral=False)
+            return
+        
+        target_kvk = kvk or db_manager.get_current_kvk_name()
+        
+        if db_manager.delete_fort_period(target_kvk, period):
+             await interaction.response.send_message(f"✅ Deleted fort data for **{period}** in **{target_kvk}**.", ephemeral=False)
+             await self.log_to_channel(interaction, "Delete Fort Period", f"KvK: {target_kvk}, Period: {period}")
+        else:
+             await interaction.response.send_message("❌ Failed to delete fort period (or none found).", ephemeral=False)

@@ -133,6 +133,21 @@ def get_snapshot_data(kvk_name: str, period_key: str, snapshot_type: str):
         logger.error(f"Error getting snapshot data: {e}")
         return {}
 
+def delete_snapshot(kvk_name: str, period_key: str, snapshot_type: str):
+    """Deletes a specific snapshot batch."""
+    try:
+        with closing(get_connection()) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                DELETE FROM kvk_snapshots 
+                WHERE kvk_name = ? AND period_key = ? AND snapshot_type = ?
+            ''', (kvk_name, period_key, snapshot_type))
+            conn.commit()
+            return cursor.rowcount > 0
+    except Exception as e:
+        logger.error(f"Error deleting snapshot: {e}")
+        return False
+
 def save_period_results(results: list):
     """Saves calculated period results."""
     try:
