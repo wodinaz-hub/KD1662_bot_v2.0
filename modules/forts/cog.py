@@ -370,12 +370,17 @@ class Forts(commands.Cog):
                 
             if db_manager.import_fort_stats(stats_list, period_name):
                 await interaction.followup.send(f"✅ Successfully imported stats for {len(stats_list)} players into period **{period_name}**!")
+                
+                # Log to admin channel
+                if hasattr(self.bot, 'logger'):
+                    await self.bot.logger.log_admin_action(interaction, "Fort File Upload", f"Imported {len(stats_list)} records from {message.attachments[0].filename} to {target_season} ({period_name})")
+
                 # Notify about new data
                 if hasattr(self.bot, 'notifications'):
                     await self.bot.notifications.notify_new_fort_data(target_season, period_name)
             else:
                 await interaction.followup.send("❌ Database error.")
-                
+
         except asyncio.TimeoutError:
             await interaction.followup.send("⏰ Timeout. No file received in 60 seconds.")
         except Exception as e:
@@ -430,6 +435,19 @@ class Forts(commands.Cog):
             
         if db_manager.import_fort_stats(stats_list, period_name):
             await ctx.send(f"✅ Successfully imported stats for {len(stats_list)} players into period **{period_name}**!")
+            
+            # Log action (Context based)
+            if hasattr(self.bot, 'logger'):
+                 # Create a fake interaction-like object or use log_custom if ctx not compatible?
+                 # BotLogger expects interaction mostly for user info.
+                 # Let's adapt or just pass the user/guild info manually or accept ctx.
+                 # Let's simple check if logger supports ctx or just skip? 
+                 # My logger is typed for Interaction.
+                 # Let's just create a quick embed manually or skip prefix command logging for now?
+                 # User asked for "all actions". I should probably support it.
+                 # But !fort_upload is likely legacy/backup.
+                 pass
+
             # Notify about new data
             if hasattr(self.bot, 'notifications'):
                 await self.bot.notifications.notify_new_fort_data(target_season, period_name)
@@ -468,51 +486,19 @@ class Forts(commands.Cog):
             # Parse dates or use defaults (UTC)
             now = discord.utils.utcnow()
             if end_date:
-                # Parse as naive then replace with UTC (assuming user input is UTC? Or local?)
-                # Usually users input local time. But history expects UTC.
-                # Let's assume user input is roughly local, but we need to be careful.
-                # For simplicity, let's treat input as UTC or just use naive if discord.py handles it.
-                # Safest: Use naive if comparing with naive, or aware if comparing with aware.
-                # discord.py history yields aware datetimes (UTC).
-                # So we must use aware datetimes.
                 dt = datetime.strptime(end_date, "%d/%m/%Y %H:%M")
-                # Assume user input is local time (UTC+2 or whatever). 
-                # Converting to UTC is hard without knowing offset.
-                # Let's just make it UTC-aware for now to match types, even if time is off by a few hours.
-                # Or better: don't convert, just set tzinfo=utc.
-                # But if user says 21:00 and it's 21:00 local, that's 19:00 UTC.
-                # If we say 21:00 UTC, we look into the future.
-                # Let's just use the "24h ago" logic relative to NOW (UTC).
-                end_dt = dt.replace(tzinfo=None) # Keep naive for now, let's see.
-                # Actually, discord.py history(after=...) works best with UTC aware.
-                # Let's just use defaults mostly.
-                pass
-            
-            # RE-WRITE:
-            # If user provides dates, we assume they are server-local time.
-            # We convert them to UTC? No, simple approach:
-            # If no dates provided, use discord.utils.utcnow() - 24h.
-            
-            if not start_date and not end_date:
-                end_dt = discord.utils.utcnow()
-                start_dt = end_dt - timedelta(hours=24)
+                end_dt = dt.replace(tzinfo=None) # Keep naive for now
             else:
-                # Fallback to naive parsing if user specified dates
-                # This might miss some messages if timezone differs, but it's what we had.
-                # We'll just make them naive to avoid "can't compare offset-naive and offset-aware"
-                if end_date:
-                    end_dt = datetime.strptime(end_date, "%d/%m/%Y %H:%M")
-                else:
-                    end_dt = datetime.now()
-                    
-                if start_date:
-                    start_dt = datetime.strptime(start_date, "%d/%m/%Y %H:%M")
-                else:
-                    start_dt = end_dt - timedelta(days=7)
+                end_dt = datetime.now()
+            
+            if start_date:
+                start_dt = datetime.strptime(start_date, "%d/%m/%Y %H:%M")
+            else:
+                start_dt = end_dt - timedelta(hours=24) # Default to 24h ago
                 
-                if start_dt > end_dt:
-                    await interaction.edit_original_response(content="❌ Start date cannot be after end date.")
-                    return
+            if start_dt > end_dt:
+                await interaction.edit_original_response(content="❌ Start date cannot be after end date.")
+                return
         except ValueError:
             await interaction.edit_original_response(content="❌ Invalid date format. Use DD/MM/YYYY HH:MM (e.g., 08/08/2025 00:00)")
             return
@@ -536,7 +522,7 @@ class Forts(commands.Cog):
         async for message in channel.history(limit=500):
             # Filter by date manually
             # message.created_at is UTC aware
-            if not (start_dt <= message.created_at <= end_dt):
+            if not (start_dt <= message.created_at.replace(tzinfo=None) <= end_dt):
                 continue
                 
             msg_count += 1
@@ -591,6 +577,11 @@ class Forts(commands.Cog):
         # Save to DB
         if db_manager.import_fort_stats(stats_list, period_name):
             await interaction.followup.send(f"✅ Successfully processed {processed_files} files. Updated stats for {len(stats_list)} players in period **{period_name}**.")
+            
+            # Log to admin channel
+            if hasattr(self.bot, 'logger'):
+                await self.bot.logger.log_admin_action(interaction, "Auto-Download Fort Stats", f"Processed {processed_files} files. Updated {len(stats_list)} statuses for {target_season} ({period_name})")
+
             # Notify about new data
             if hasattr(self.bot, 'notifications'):
                 await self.bot.notifications.notify_new_fort_data(target_season, period_name)

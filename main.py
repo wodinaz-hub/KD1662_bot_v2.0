@@ -26,6 +26,10 @@ class MyBot(commands.Bot):
         # Initialize Notification Manager
         from core.notifications import NotificationManager
         self.notifications = NotificationManager(self)
+        
+        # Initialize Logger
+        from core.logger import BotLogger
+        self.logger = BotLogger(self)
 
     async def setup_hook(self):
         logger.info("Starting module loading...")
@@ -129,6 +133,18 @@ class MyBot(commands.Bot):
         await self.wait_until_ready()
 
 
+    async def on_interaction(self, interaction: discord.Interaction):
+        """Global interaction listener to log commands."""
+        # Log successful slash commands
+        if interaction.type == discord.InteractionType.application_command:
+            # We log invocation here. Completions are harder to track globally without subclassing Tree.
+            # But specific logs can be done in commands if needed.
+            # This ensures we at least know WHO ran WHAT.
+            if hasattr(self, 'logger') and interaction.command:
+                 await self.logger.log_command(interaction, interaction.command.name)
+
+        await super().on_interaction(interaction)
+
 intents = discord.Intents.default()
 intents.message_content = True  # Enable message content intents
 bot = MyBot(intents=intents)
@@ -146,7 +162,11 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
             logger.warning(f"Interaction expired for command '{command_name}' from {interaction.user}")
             return
     
-    # Log other errors
+    # Log to channel using BotLogger
+    if hasattr(bot, 'logger'):
+        await bot.logger.log_error(interaction, error, command_name)
+
+    # Log to console
     logger.error(f"Error in command '{command_name}': {error}")
     
     # Try to respond if possible

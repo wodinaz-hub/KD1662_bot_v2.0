@@ -447,26 +447,17 @@ class Stats(commands.Cog):
             await interaction.response.send_message(embed=embed)
 
     async def log_to_channel(self, interaction: discord.Interaction, action: str, details: str):
-        log_channel_id = int(os.getenv('LOG_CHANNEL_ID', 0))
-        if log_channel_id == 0:
-            return
-        channel = self.bot.get_channel(log_channel_id)
-        
-        if not channel:
-            return
-
-        embed = discord.Embed(title="👤 User Action Logged", color=discord.Color.green(), timestamp=interaction.created_at)
-        embed.add_field(name="User", value=interaction.user.mention, inline=True)
-        embed.add_field(name="Action", value=action, inline=True)
-        embed.add_field(name="Details", value=details, inline=False)
-        embed.set_footer(text=f"ID: {interaction.user.id}")
-        
-        try:
-            await channel.send(embed=embed)
-        except Exception as e:
-            logger.error(f"Failed to send log message: {e}")
-            
-        db_manager.log_admin_action(interaction.user.id, interaction.user.name, action, details)
+         # Redirect to core logger if available
+         if hasattr(self.bot, 'logger'):
+             await self.bot.logger.log_admin_action(interaction, action, details)
+         
+         # Also log to DB if needed, though log_admin_action in core might not do it?
+         # Wait, core logger only logs to channel. We still need DB logging.
+         # So we should keep calling db_manager.log_admin_action HERE or in core logger.
+         # The plan said: "log_admin_action: Handles admin specific logs (and writes to DB)."
+         # But core logger is generic. Let's keep DB logging separate or invoke it there.
+         # Actually, better to just call db_manager here to be safe and use bot.logger for channel.
+         db_manager.log_admin_action(interaction.user.id, interaction.user.name, action, details)
 
 
 async def setup(bot: commands.Bot):

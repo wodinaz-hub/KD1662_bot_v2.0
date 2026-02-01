@@ -95,20 +95,11 @@ class Admin(commands.Cog):
 
     async def log_to_channel(self, interaction: discord.Interaction, action: str, details: str):
         """Logs an admin action to the specified Discord channel and database."""
-        log_channel_id = int(os.getenv('LOG_CHANNEL_ID', 0))
-        if log_channel_id != 0:
-            channel = self.bot.get_channel(log_channel_id)
-            if channel:
-                embed = discord.Embed(title="🛡️ Admin Action Logged", color=discord.Color.blue(), timestamp=interaction.created_at)
-                embed.add_field(name="Admin", value=interaction.user.mention, inline=True)
-                embed.add_field(name="Action", value=action, inline=True)
-                embed.add_field(name="Details", value=details, inline=False)
-                embed.set_footer(text=f"ID: {interaction.user.id}")
-                try:
-                    await channel.send(embed=embed)
-                except Exception as e:
-                    logger.error(f"Failed to send log message: {e}")
+        # Use centralized logger if available
+        if hasattr(self.bot, 'logger'):
+            await self.bot.logger.log_admin_action(interaction, action, details)
         
+        # Always log to database
         db_manager.log_admin_action(interaction.user.id, interaction.user.name, action, details)
 
     @app_commands.command(name='admin_panel', description='Open the central administrative dashboard.')
