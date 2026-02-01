@@ -220,10 +220,10 @@ def get_all_players_global():
             
             query_safe = '''
                 SELECT 
-                    player_id, player_name, power, kill_points, deaths
+                    player_id, player_name, power, kill_points, deaths, kvk_name
                 FROM (
                     SELECT 
-                        player_id, player_name, power, kill_points, deaths,
+                        player_id, player_name, power, kill_points, deaths, kvk_name,
                         ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY kill_points DESC, power DESC) as rn
                     FROM kvk_snapshots
                 ) WHERE rn = 1
@@ -232,7 +232,7 @@ def get_all_players_global():
                 
                 SELECT 
                     player_id, player_name, MAX(power) as power, 
-                    0 as kill_points, 0 as deaths
+                    0 as kill_points, 0 as deaths, 'Roster' as kvk_name
                 FROM kingdom_players
                 WHERE player_id NOT IN (SELECT DISTINCT player_id FROM kvk_snapshots)
                 GROUP BY player_id
