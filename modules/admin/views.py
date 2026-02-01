@@ -105,8 +105,17 @@ class FinishKvKConfirmView(discord.ui.View):
     @discord.ui.button(label="Yes, Finish & Archive", style=discord.ButtonStyle.red)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         from datetime import datetime
-        start_date = "Unknown" 
-        end_date = datetime.now().strftime("%Y-%m-%d")
+        
+        # Try to get dates from DB
+        seasons = db_manager.get_all_seasons()
+        current_season_data = next((s for s in seasons if s['value'] == self.kvk_name), None)
+        
+        start_date = current_season_data.get('start_date') if current_season_data else "Unknown"
+        end_date = current_season_data.get('end_date') if current_season_data else datetime.now().strftime("%Y-%m-%d")
+        
+        if not start_date: start_date = "Unknown"
+        if not end_date: end_date = datetime.now().strftime("%Y-%m-%d")
+        
         archive_name = f"{self.kvk_name} ({start_date} - {end_date})"
         
         if db_manager.archive_kvk_data(self.kvk_name, archive_name):

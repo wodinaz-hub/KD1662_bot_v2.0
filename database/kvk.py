@@ -239,14 +239,53 @@ def archive_kvk_data(current_name: str, archive_name: str):
             cursor.execute("UPDATE kvk_snapshots SET kvk_name = ? WHERE kvk_name = ?", (archive_name, current_name))
             # Update requirements
             cursor.execute("UPDATE kvk_requirements SET kvk_name = ? WHERE kvk_name = ?", (archive_name, current_name))
-            # Update season status
-            cursor.execute("UPDATE kvk_seasons SET is_active = 0, is_archived = 1 WHERE value = ?", (current_name,))
-            # If archive_name is new, we might need to insert it, but usually it's just renaming the current active one.
+            # Update fort stats
+            cursor.execute("UPDATE fort_stats SET kvk_name = ? WHERE kvk_name = ?", (archive_name, current_name))
+            cursor.execute("UPDATE fort_periods SET kvk_name = ? WHERE kvk_name = ?", (archive_name, current_name))
+            
+            # Update season definition
+            # We rename the 'value' and 'label' to the archive name
+            cursor.execute("""
+                UPDATE kvk_seasons 
+                SET value = ?, label = ?, is_active = 0, is_archived = 1 
+                WHERE value = ?
+            """, (archive_name, archive_name, current_name))
+            
             conn.commit()
         return True
     except Exception as e:
         logger.error(f"Error archiving KvK data: {e}")
         return False
+
+def rename_kvk_season(old_name: str, new_name: str):
+    """Renames a KvK season across all tables."""
+    try:
+        with closing(get_connection()) as conn:
+            cursor = conn.cursor()
+            # Check if new name exists
+            cursor.execute("SELECT 1 FROM kvk_seasons WHERE value = ?", (new_name,))
+            if cursor.fetchone():
+                return False, f"Season '{new_name}' already exists."
+
+            # Update all tables
+            cursor.execute("UPDATE kvk_stats SET kvk_name = ? WHERE kvk_name = ?", (new_name, old_name))
+            cursor.execute("UPDATE kvk_snapshots SET kvk_name = ? WHERE kvk_name = ?", (new_name, old_name))
+            cursor.execute("UPDATE kvk_requirements SET kvk_name = ? WHERE kvk_name = ?", (new_name, old_name))
+            cursor.execute("UPDATE fort_stats SET kvk_name = ? WHERE kvk_name = ?", (new_name, old_name))
+            cursor.execute("UPDATE fort_periods SET kvk_name = ? WHERE kvk_name = ?", (new_name, old_name))
+            cursor.execute("UPDATE kingdom_players SET kvk_name = ? WHERE kvk_name = ?", (new_name, old_name))
+            
+            # Update season definition
+            cursor.execute("UPDATE kvk_seasons SET value = ?, label = ? WHERE value = ?", (new_name, new_name, old_name))
+            
+            # Update current settings if applicable
+            cursor.execute("UPDATE kvk_settings SET setting_value = ? WHERE setting_key = 'current_kvk' AND setting_value = ?", (new_name, old_name))
+            
+            conn.commit()
+        return True, f"Successfully renamed '{old_name}' to '{new_name}'."
+    except Exception as e:
+        logger.error(f"Error renaming KvK season: {e}")
+        return False, str(e)
 
 def get_all_seasons():
     """Returns all available KvK seasons (active, available, and archived)."""

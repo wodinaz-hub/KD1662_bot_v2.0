@@ -303,6 +303,28 @@ class Admin(commands.Cog):
         seasons = db_manager.get_all_seasons()
         return [app_commands.Choice(name=s['label'], value=s['value']) for s in seasons if s.get('is_archived') and current.lower() in s['label'].lower()][:25]
 
+    @app_commands.command(name="rename_kvk_season", description="✏️ Rename an archived KvK season.")
+    @app_commands.describe(old_name="Select the season to rename", new_name="The new name (e.g. 'KvK 1 (Win)')")
+    @app_commands.default_permissions(administrator=True)
+    async def rename_kvk_season(self, interaction: discord.Interaction, old_name: str, new_name: str):
+        if not self.is_admin(interaction):
+            await interaction.response.send_message("You do not have permissions.", ephemeral=False)
+            return
+            
+        await interaction.response.defer(ephemeral=False)
+        
+        success, msg = db_manager.rename_kvk_season(old_name, new_name)
+        if success:
+            await interaction.followup.send(f"✅ {msg}")
+            await self.log_to_channel(interaction, "Rename KvK Season", f"Old: {old_name}\nNew: {new_name}")
+        else:
+            await interaction.followup.send(f"❌ Failed: {msg}")
+
+    @rename_kvk_season.autocomplete('old_name')
+    async def rename_kvk_season_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        seasons = db_manager.get_played_seasons()
+        return [app_commands.Choice(name=s['label'], value=s['value']) for s in seasons if current.lower() in s['label'].lower()][:25]
+
     @app_commands.command(name="calculate_period", description="Calculate results for a period.")
     @app_commands.describe(period_name="Name of the period")
     @app_commands.default_permissions(administrator=True)
