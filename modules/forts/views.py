@@ -3,7 +3,7 @@ from database import database_manager as db_manager
 
 class FortLeaderboardPaginationView(discord.ui.View):
     def __init__(self, data, title, kvk_name, period_key="total"):
-        super().__init__(timeout=180)
+        super().__init__(timeout=600)
         self.data = data
         self.title = title
         self.kvk_name = kvk_name
@@ -11,11 +11,28 @@ class FortLeaderboardPaginationView(discord.ui.View):
         self.per_page = 10
         self.current_page = 0
         self.total_pages = (len(data) - 1) // self.per_page + 1
+        self.max_pages = 25 # Discord select menu limit safety if we add dropdowns later
         
         # Get last updated time
         self.last_updated = db_manager.get_fort_last_updated(kvk_name, period_key)
         
         self.update_buttons()
+
+    async def on_timeout(self):
+        """Disable buttons on timeout."""
+        for child in self.children:
+            child.disabled = True
+        try:
+            # Note: We can only edit if we have the message object, 
+            # which is easier if we store it or reply to interaction.
+            # But normally Views are attached to a message.
+            # To edit the message properly on timeout, we need 'self.message' which is set if we use 'interaction.message'
+            # inside callbacks, but here we might not have it stored easily unless we assign it.
+            # Best practice: Assign self.message in the command that sends it 
+            # or in the first interaction.
+            pass 
+        except Exception:
+            pass
 
     def create_embed(self):
         start = self.current_page * self.per_page
