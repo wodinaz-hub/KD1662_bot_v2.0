@@ -122,13 +122,13 @@ class PeriodSelectView(discord.ui.View):
         farm_accounts = [a for a in self.accounts if a['account_type'] == 'farm']
         
         for acc in main_accounts:
-            self.add_item(AccountStatsButton(acc['player_id'], f"Main: {acc['player_id']}", discord.ButtonStyle.primary))
+            self.add_item(AccountStatsButton(acc['player_id'], f"Main: {acc['player_name']}", discord.ButtonStyle.primary))
         
         for acc in alt_accounts:
-            self.add_item(AccountStatsButton(acc['player_id'], f"Alt: {acc['player_id']}", discord.ButtonStyle.secondary))
+            self.add_item(AccountStatsButton(acc['player_id'], f"Alt: {acc['player_name']}", discord.ButtonStyle.secondary))
         
         for acc in farm_accounts:
-            self.add_item(AccountStatsButton(acc['player_id'], f"Farm: {acc['player_id']}", discord.ButtonStyle.secondary))
+            self.add_item(AccountStatsButton(acc['player_id'], f"Farm: {acc['player_name']}", discord.ButtonStyle.secondary))
         
         if len(self.accounts) > 1:
             self.add_item(TotalStatsButton())
@@ -208,13 +208,13 @@ class MyStatsView(discord.ui.View):
         
         # Add buttons by type with emojis
         for acc in main_accounts:
-            self.add_item(AccountStatsButton(acc['player_id'], f"Main: {acc['player_id']}", discord.ButtonStyle.primary))
+            self.add_item(AccountStatsButton(acc['player_id'], f"Main: {acc['player_name']}", discord.ButtonStyle.primary))
         
         for acc in alt_accounts:
-            self.add_item(AccountStatsButton(acc['player_id'], f"Alt: {acc['player_id']}", discord.ButtonStyle.secondary))
+            self.add_item(AccountStatsButton(acc['player_id'], f"Alt: {acc['player_name']}", discord.ButtonStyle.secondary))
         
         for acc in farm_accounts:
-            self.add_item(AccountStatsButton(acc['player_id'], f"Farm: {acc['player_id']}", discord.ButtonStyle.secondary))
+            self.add_item(AccountStatsButton(acc['player_id'], f"Farm: {acc['player_name']}", discord.ButtonStyle.secondary))
             
         # Add Total button if more than one account
         if len(self.accounts) > 1:
@@ -329,7 +329,7 @@ class UnifiedStatsView(discord.ui.View):
                 # Use Buttons for few accounts (quick switch)
                 for acc in self.accounts:
                     style = discord.ButtonStyle.primary if acc['player_id'] == self.selected_player_id else discord.ButtonStyle.secondary
-                    label = f"{acc['account_type'].capitalize()}: {acc['player_id']}"
+                    label = f"{acc['account_type'].capitalize()}: {acc['player_name']}"
                     btn = discord.ui.Button(label=label, style=style, row=2)
                     
                     # Create a closure for the callback
@@ -346,7 +346,7 @@ class UnifiedStatsView(discord.ui.View):
                 options = []
                 for acc in self.accounts:
                     is_selected = (acc['player_id'] == self.selected_player_id)
-                    label = f"{acc['account_type'].capitalize()}: {acc['player_id']}"
+                    label = f"{acc['account_type'].capitalize()}: {acc['player_name']}"
                     options.append(discord.SelectOption(
                         label=label, 
                         value=str(acc['player_id']), 
