@@ -301,8 +301,12 @@ class Stats(commands.Cog):
             color=discord.Color.green()
         )
         
+        # Get requirements and rank
+        requirements = db_manager.get_requirements(kvk_name, stats['total_power'])
+        rank = db_manager.get_player_rank(player_id, kvk_name)
+        
         # Add stats fields using the helper
-        add_stats_fields(embed, stats)
+        add_stats_fields(embed, stats, requirements, rank=rank)
         
         # Add comparison if current KvK and period is 'all'
         if kvk_name == db_manager.get_current_kvk_name() and period_key == "all":
