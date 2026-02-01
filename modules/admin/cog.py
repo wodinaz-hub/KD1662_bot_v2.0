@@ -322,8 +322,23 @@ class Admin(commands.Cog):
             return
         embed = discord.Embed(title="📅 Played KvK Seasons", color=discord.Color.blue())
         for s in seasons:
-            status = "ACTIVE" if s.get('is_active') else "Archived" if s.get('is_archived') else "Inactive"
-            embed.add_field(name=f"{s['label']} (`{s['value']}`)", value=f"Status: {status}", inline=False)
+            status_emoji = "⚔️" if s.get('is_active') else "📁"
+            status = "ACTIVE" if s.get('is_active') else "Archived"
+            
+            # Build date string
+            dates = ""
+            if s.get('start_date') and s.get('end_date'):
+                dates = f"\n📅 {s['start_date']} → {s['end_date']}"
+            elif s.get('start_date'):
+                dates = f"\n📅 From: {s['start_date']}"
+            elif s.get('end_date'):
+                dates = f"\n📅 Until: {s['end_date']}"
+            
+            embed.add_field(
+                name=f"{status_emoji} {s['label']}", 
+                value=f"Key: `{s['value']}`\nStatus: {status}{dates}", 
+                inline=False
+            )
         await interaction.response.send_message(embed=embed, ephemeral=False)
 
     @app_commands.command(name="delete_kvk_season", description="⚠️ Permanently delete an archived KvK season.")
