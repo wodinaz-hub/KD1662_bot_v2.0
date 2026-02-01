@@ -278,3 +278,53 @@ def create_fort_dynamics_chart(history_data, player_name):
         logger.error(f"Error generating fort dynamics chart: {e}")
         return None
 
+
+def create_player_dynamics_chart(history_data, player_name):
+    """
+    Generates a line chart showing player KP/Deaths over time.
+    history_data: list of dicts {period_key, kill_points, deaths, power}
+    """
+    try:
+        if not history_data or len(history_data) < 2:
+            return None
+            
+        # Extract data
+        labels = [h['period_key'] for h in history_data]
+        kp = [h['kill_points'] for h in history_data]
+        deaths = [h['deaths'] for h in history_data]
+        
+        # Setup figure
+        plt.style.use('dark_background')
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # Plot lines
+        ax.plot(labels, kp, marker='o', linewidth=3, color='#ffa500', label='Kill Points')
+        ax.plot(labels, deaths, marker='s', linestyle='--', alpha=0.7, color='#d462d1', label='Deaths')
+        
+        # Fill area under KP
+        ax.fill_between(labels, kp, alpha=0.1, color='#ffa500')
+        
+        # Customization
+        ax.set_title(f"Statistics Dynamics: {player_name}", fontsize=16, pad=20)
+        ax.set_ylabel("Value", fontsize=12)
+        ax.set_xlabel("Period", fontsize=12)
+        ax.grid(True, linestyle=':', alpha=0.3)
+        ax.legend()
+        
+        # Format Y axis with comma separators
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: format(int(x), ',')))
+        
+        # Rotate labels if many
+        if len(labels) > 5:
+            plt.xticks(rotation=45)
+            
+        # Save to buffer
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+        buf.seek(0)
+        plt.close(fig)
+        return buf
+        
+    except Exception as e:
+        logger.error(f"Error generating player dynamics chart: {e}")
+        return None
