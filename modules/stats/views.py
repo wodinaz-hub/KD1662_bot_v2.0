@@ -323,22 +323,44 @@ class UnifiedStatsView(discord.ui.View):
         period_select.callback = self.period_callback
         self.add_item(period_select)
 
-        # 3. Account Selection (Buttons)
+        # 3. Account Selection (Row 2)
         if len(self.accounts) > 1:
-            for acc in self.accounts:
-                style = discord.ButtonStyle.primary if acc['player_id'] == self.selected_player_id else discord.ButtonStyle.secondary
-                label = f"{acc['account_type'].capitalize()}: {acc['player_id']}"
-                btn = discord.ui.Button(label=label, style=style, row=2)
+            if len(self.accounts) <= 5:
+                # Use Buttons for few accounts (quick switch)
+                for acc in self.accounts:
+                    style = discord.ButtonStyle.primary if acc['player_id'] == self.selected_player_id else discord.ButtonStyle.secondary
+                    label = f"{acc['account_type'].capitalize()}: {acc['player_id']}"
+                    btn = discord.ui.Button(label=label, style=style, row=2)
+                    
+                    # Create a closure for the callback
+                    def make_callback(p_id):
+                        async def callback(interaction: discord.Interaction):
+                            self.selected_player_id = p_id
+                            await self.update_message(interaction)
+                        return callback
+                    
+                    btn.callback = make_callback(acc['player_id'])
+                    self.add_item(btn)
+            else:
+                # Use Select Menu for > 5 accounts
+                options = []
+                for acc in self.accounts:
+                    is_selected = (acc['player_id'] == self.selected_player_id)
+                    label = f"{acc['account_type'].capitalize()}: {acc['player_id']}"
+                    options.append(discord.SelectOption(
+                        label=label, 
+                        value=str(acc['player_id']), 
+                        default=is_selected,
+                        emoji="👤"
+                    ))
                 
-                # Create a closure for the callback
-                def make_callback(p_id):
-                    async def callback(interaction: discord.Interaction):
-                        self.selected_player_id = p_id
-                        await self.update_message(interaction)
-                    return callback
-                
-                btn.callback = make_callback(acc['player_id'])
-                self.add_item(btn)
+                acc_select = discord.ui.Select(placeholder="Switch Account...", options=options[:25], row=2)
+                acc_select.callback = self.account_select_callback
+                self.add_item(acc_select)
+
+    async def account_select_callback(self, interaction: discord.Interaction):
+         self.selected_player_id = int(interaction.data['values'][0])
+         await self.update_message(interaction)
 
     async def season_callback(self, interaction: discord.Interaction):
         self.selected_season = interaction.data['values'][0]

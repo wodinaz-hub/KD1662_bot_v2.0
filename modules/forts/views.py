@@ -108,15 +108,33 @@ class FortStatsView(discord.ui.View):
     def update_components(self):
         self.clear_items()
         
-        # 1. Accounts Buttons (Row 0)
+        # 1. Accounts Selection (Row 0)
         if len(self.accounts) > 1:
-            for acc in self.accounts:
-                label = f"{acc['account_type'].capitalize()} ({acc['player_name']})"
-                style = discord.ButtonStyle.primary if acc['player_id'] == self.player_id else discord.ButtonStyle.secondary
+            if len(self.accounts) <= 5:
+                # Use Buttons for few accounts (quick switch)
+                for acc in self.accounts:
+                    label = f"{acc['account_type'].capitalize()} ({acc['player_name']})"
+                    style = discord.ButtonStyle.primary if acc['player_id'] == self.player_id else discord.ButtonStyle.secondary
+                    
+                    button = discord.ui.Button(label=label, style=style, custom_id=f"acc_{acc['player_id']}", row=0)
+                    button.callback = self.create_account_callback(acc['player_id'], acc['player_name'])
+                    self.add_item(button)
+            else:
+                # Use Select Menu for many accounts (prevents overflow)
+                options = []
+                for acc in self.accounts:
+                    is_selected = (acc['player_id'] == self.player_id)
+                    label = f"{acc['account_type'].capitalize()}: {acc['player_name']}"
+                    options.append(discord.SelectOption(
+                        label=label, 
+                        value=str(acc['player_id']), 
+                        default=is_selected,
+                        emoji="👤"
+                    ))
                 
-                button = discord.ui.Button(label=label, style=style, custom_id=f"acc_{acc['player_id']}", row=0)
-                button.callback = self.create_account_callback(acc['player_id'], acc['player_name'])
-                self.add_item(button)
+                acc_select = discord.ui.Select(placeholder="Select Account...", options=options[:25], row=0)
+                acc_select.callback = self.account_select_callback
+                self.add_item(acc_select)
 
         # 2. Season Select (Row 1)
         seasons = db_manager.get_fort_seasons()
@@ -160,6 +178,16 @@ class FortStatsView(discord.ui.View):
             self.player_name = pname
             await self.update_message(interaction)
         return callback
+
+    async def account_select_callback(self, interaction: discord.Interaction):
+        # Callback for the account select dropdown
+        selected_pid = int(interaction.data['values'][0])
+        # Find player name
+        acc = next((a for a in self.accounts if a['player_id'] == selected_pid), None)
+        if acc:
+            self.player_id = acc['player_id']
+            self.player_name = acc['player_name']
+            await self.update_message(interaction)
 
     async def season_callback(self, interaction: discord.Interaction):
         self.selected_season = interaction.data['values'][0]
