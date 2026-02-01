@@ -401,16 +401,16 @@ def get_current_kvk_name():
 def create_kvk_season(name: str, start_date: str = None, end_date: str = None, make_active: bool = True):
     """Creates a new KvK season with optional dates and sets it as active."""
     try:
-        # Generate a value (key) from the name
-        value = name.lower().replace(" ", "_").replace("-", "_").replace("(", "").replace(")", "")
-        
         with closing(get_connection()) as conn:
             cursor = conn.cursor()
             
-            # Check if season already exists
-            cursor.execute("SELECT 1 FROM kvk_seasons WHERE value = ?", (value,))
-            if cursor.fetchone():
-                return False, f"Season with key `{value}` already exists."
+            # Get existing keys to ensure uniqueness
+            cursor.execute("SELECT value FROM kvk_seasons")
+            existing_keys = [row[0] for row in cursor.fetchall()]
+            
+            # Generate a unique value (key) from the name using helper
+            from core.helpers import generate_unique_key
+            value = generate_unique_key(name, existing_keys)
             
             # Reset all active flags if making this one active
             if make_active:

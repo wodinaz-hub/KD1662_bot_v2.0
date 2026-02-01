@@ -342,16 +342,22 @@ class Stats(commands.Cog):
         # This is shown as a secondary embed image if available
         played_seasons = db_manager.get_played_seasons()
         if len(played_seasons) > 1:
+            # Batch query - get stats for all seasons in one DB call
+            season_values = [s['value'] for s in played_seasons[:5]]  # Limit to 5 seasons
+            cross_kvk_results = db_manager.get_player_cross_kvk_stats(player_id, season_values)
+            
+            # Map season values to labels for chart
+            season_map = {s['value']: s['label'] for s in played_seasons[:5]}
+            
             cross_kvk_stats = []
-            for season in played_seasons[:5]:  # Limit to 5 seasons
-                season_stats = db_manager.get_player_stats_by_period(player_id, season['value'], "all")
-                if season_stats:
-                    cross_kvk_stats.append({
-                        'period_key': season['label'][:15],  # Truncate for chart readability
-                        'kill_points': season_stats.get('total_kill_points', 0) or 0,
-                        'deaths': season_stats.get('total_deaths', 0) or 0,
-                        'power': season_stats.get('total_power', 0) or 0
-                    })
+            for result in cross_kvk_results:
+                label = season_map.get(result['kvk_name'], result['kvk_name'])
+                cross_kvk_stats.append({
+                    'period_key': label[:15],  # Truncate for chart readability
+                    'kill_points': result.get('total_kill_points', 0) or 0,
+                    'deaths': result.get('total_deaths', 0) or 0,
+                    'power': result.get('total_power', 0) or 0
+                })
             
             # Only create dynamics chart if player has stats in 2+ KvKs
             if len(cross_kvk_stats) > 1 and not file:
