@@ -310,21 +310,47 @@ def get_all_seasons():
             return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
         logger.error(f"Error getting all seasons: {e}")
-    except Exception as e:
-        logger.error(f"Error getting all seasons: {e}")
         return []
 
+# Cache for frequently called functions
+_cache = {}
+_cache_timestamps = {}
+CACHE_TTL = 60  # seconds
+
+def _get_cached(key, fetch_func, ttl=CACHE_TTL):
+    """Helper to get cached value or fetch fresh."""
+    import time
+    current_time = time.time()
+    
+    if key in _cache:
+        if current_time - _cache_timestamps.get(key, 0) < ttl:
+            return _cache[key]
+    
+    result = fetch_func()
+    _cache[key] = result
+    _cache_timestamps[key] = current_time
+    return result
+
+def clear_season_cache():
+    """Clears the season cache. Call after modifying seasons."""
+    _cache.pop('played_seasons', None)
+    _cache.pop('current_kvk', None)
+
 def get_played_seasons():
-    """Returns only active or archived KvK seasons (excluding templates)."""
-    try:
-        with closing(get_connection()) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM kvk_seasons WHERE is_active = 1 OR is_archived = 1 ORDER BY is_active DESC, value DESC")
-            return [dict(row) for row in cursor.fetchall()]
-    except Exception as e:
-        logger.error(f"Error getting played seasons: {e}")
-        return []
+    """Returns only active or archived KvK seasons (excluding templates). Cached."""
+    def fetch():
+        try:
+            with closing(get_connection()) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM kvk_seasons WHERE is_active = 1 OR is_archived = 1 ORDER BY is_active DESC, value DESC")
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Error getting played seasons: {e}")
+            return []
+    
+    return _get_cached('played_seasons', fetch)
+
 
 def delete_kvk_season(kvk_name: str):
     """Permanently deletes a KvK season and all associated data."""
@@ -358,16 +384,19 @@ def seed_seasons(default_options: list):
         logger.error(f"Error seeding seasons: {e}")
 
 def get_current_kvk_name():
-    """Returns the current KvK name from the database."""
-    try:
-        with closing(get_connection()) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT setting_value FROM kvk_settings WHERE setting_key = 'current_kvk'")
-            row = cursor.fetchone()
-            return row[0] if row else "Not set"
-    except Exception as e:
-        logger.error(f"Error getting current KvK name: {e}")
-        return "Not set"
+    """Returns the current KvK name from the database. Cached."""
+    def fetch():
+        try:
+            with closing(get_connection()) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT setting_value FROM kvk_settings WHERE setting_key = 'current_kvk'")
+                row = cursor.fetchone()
+                return row[0] if row else "Not set"
+        except Exception as e:
+            logger.error(f"Error getting current KvK name: {e}")
+            return "Not set"
+    
+    return _get_cached('current_kvk', fetch)
 
 def create_kvk_season(name: str, start_date: str = None, end_date: str = None, make_active: bool = True):
     """Creates a new KvK season with optional dates and sets it as active."""
@@ -398,6 +427,7 @@ def create_kvk_season(name: str, start_date: str = None, end_date: str = None, m
                 cursor.execute("INSERT OR REPLACE INTO kvk_settings (setting_key, setting_value) VALUES ('current_kvk', ?)", (value,))
             
             conn.commit()
+        clear_season_cache()  # Clear cache after creating
         return True, f"Season **{name}** created successfully! (Key: `{value}`)"
     except Exception as e:
         logger.error(f"Error creating KvK season: {e}")
@@ -413,6 +443,7 @@ def set_current_kvk_name(kvk_name: str):
             cursor.execute("UPDATE kvk_seasons SET is_active = 0") # Reset all
             cursor.execute("UPDATE kvk_seasons SET is_active = 1 WHERE value = ?", (kvk_name,))
             conn.commit()
+        clear_season_cache()  # Clear cache after changing active season
         return True
     except Exception as e:
         logger.error(f"Error setting current KvK name: {e}")

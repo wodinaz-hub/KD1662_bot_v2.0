@@ -9,6 +9,7 @@ import logging
 import os
 from database import database_manager as db_manager
 from core import graphics
+from core.helpers import get_season_autocomplete_choices
 from .views import *
 from .helpers import add_stats_fields, format_period_label
 
@@ -75,14 +76,7 @@ class Stats(commands.Cog):
     @kingdom_stats.autocomplete('season')
     async def season_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         seasons = db_manager.get_played_seasons()
-        choices = []
-        for s in seasons:
-            emoji = "📁" if s['is_archived'] else "⚔️"
-            name = f"{emoji} {s['label']}"
-            
-            if current.lower() in name.lower() or current.lower() in s['value'].lower():
-                choices.append(app_commands.Choice(name=name, value=s['value']))
-        return choices[:25]
+        return get_season_autocomplete_choices(seasons, current)
 
     @app_commands.command(name='my_stats', description='Show statistics for your linked accounts.')
     @app_commands.describe(season="Optional: Select a specific season (current or archive)")
@@ -92,16 +86,9 @@ class Stats(commands.Cog):
     
     @my_stats.autocomplete('season')
     async def my_stats_season_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        """Autocomplete for season parameter - reuse the same logic as kingdom_stats"""
+        """Autocomplete for season parameter - uses shared helper"""
         seasons = db_manager.get_played_seasons()
-        choices = []
-        for s in seasons:
-            emoji = "📁" if s.get('is_archived') else "⚔️"
-            name = f"{emoji} {s['label']}"
-            
-            if current.lower() in name.lower() or current.lower() in s['value'].lower():
-                choices.append(app_commands.Choice(name=name, value=s['value']))
-        return choices[:25]
+        return get_season_autocomplete_choices(seasons, current)
 
     async def my_stats_logic(self, interaction: discord.Interaction, season_override: str = None):
         accounts = db_manager.get_linked_accounts(interaction.user.id)

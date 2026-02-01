@@ -6,6 +6,7 @@ import logging
 import io
 import csv
 from database import database_manager as db_manager
+from core.helpers import get_season_autocomplete_choices
 from .views import (
     AdminPanelView, KvKSelectView, FinishKvKConfirmView, 
     ResetBotConfirmView, ClearFortsConfirmView, WizardKvKSelectView,
@@ -182,21 +183,19 @@ class Admin(commands.Cog):
             await interaction.response.send_message("You do not have permissions.", ephemeral=False)
             return
         
-        # Validate dates if provided
+        # Validate dates using helper
+        from core.helpers import validate_date
+        
         if start_date:
-            try:
-                from datetime import datetime
-                datetime.strptime(start_date, "%Y-%m-%d")
-            except ValueError:
-                await interaction.response.send_message("❌ Invalid start date format. Use YYYY-MM-DD.", ephemeral=False)
+            is_valid, error = validate_date(start_date)
+            if not is_valid:
+                await interaction.response.send_message(f"❌ {error}", ephemeral=False)
                 return
         
         if end_date:
-            try:
-                from datetime import datetime
-                datetime.strptime(end_date, "%Y-%m-%d")
-            except ValueError:
-                await interaction.response.send_message("❌ Invalid end date format. Use YYYY-MM-DD.", ephemeral=False)
+            is_valid, error = validate_date(end_date)
+            if not is_valid:
+                await interaction.response.send_message(f"❌ {error}", ephemeral=False)
                 return
         
         success, msg = db_manager.create_kvk_season(name, start_date, end_date, make_active=True)

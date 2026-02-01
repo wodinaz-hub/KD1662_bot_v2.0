@@ -37,7 +37,8 @@ from .kvk import (
     get_total_player_stats,
     get_kingdom_stats,
     get_played_seasons,
-    delete_snapshot
+    delete_snapshot,
+    clear_season_cache
 )
 from .forts import (
     import_fort_stats,
