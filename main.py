@@ -175,6 +175,13 @@ async def sync(ctx, spec: str = None):
         synced = await ctx.bot.tree.sync()
         await ctx.send(f"Synced {len(synced)} commands globally. (May take up to 1 hour).")
 
+@bot.command()
+async def clearlocal(ctx):
+    """Clears all commands from the current guild (Fixes duplicates)."""
+    ctx.bot.tree.clear_commands(guild=ctx.guild)
+    await ctx.bot.tree.sync(guild=ctx.guild)
+    await ctx.send("✅ Cleared guild-specific commands. Duplicate menu items should disappear.")
+
 # Run bot
 if __name__ == "__main__":
     TOKEN = os.getenv('DISCORD_TOKEN')

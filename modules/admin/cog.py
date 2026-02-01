@@ -614,7 +614,6 @@ class Admin(commands.Cog):
             text = text[:1900] + "\n...(truncated)"
             
         await interaction.followup.send(text)
-        await interaction.followup.send(text)
 
     @app_commands.command(name="delete_snapshot", description="⚠️ Delete a specific snapshot batch.")
     @app_commands.describe(period="Period key (e.g. week_1)", type="start or end", kvk="Optional KvK name")
