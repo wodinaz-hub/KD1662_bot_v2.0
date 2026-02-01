@@ -152,9 +152,9 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
     # Try to respond if possible
     try:
         if interaction.response.is_done():
-            await interaction.followup.send(f"❌ An error occurred: {str(error)[:100]}", ephemeral=True)
+            await interaction.followup.send(f"❌ An error occurred: {str(error)[:100]}", ephemeral=False)
         else:
-            await interaction.response.send_message(f"❌ An error occurred: {str(error)[:100]}", ephemeral=True)
+            await interaction.response.send_message(f"❌ An error occurred: {str(error)[:100]}", ephemeral=False)
     except:
         pass  # Can't respond, interaction is dead
 
