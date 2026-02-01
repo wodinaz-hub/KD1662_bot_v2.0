@@ -81,7 +81,8 @@ def get_player_fort_stats_history(player_id: int, kvk_name: str):
 def get_fort_leaderboard(kvk_name: str, period_key: str = "total"):
     """
     Returns fort leaderboard. 
-    If period_key is "total", sums up all periods for that KvK.
+    Shows ALL players known in that KvK.
+    If period_key is "total", sums up all periods.
     """
     try:
         with closing(get_connection()) as conn:
@@ -102,16 +103,59 @@ def get_fort_leaderboard(kvk_name: str, period_key: str = "total"):
                     ORDER BY total_forts DESC
                 ''', (kvk_name,))
             else:
+                # Get all players known in this KvK, then join with specific period stats
                 cursor.execute('''
-                    SELECT * FROM fort_stats
-                    WHERE kvk_name = ? AND period_key = ?
+                    SELECT 
+                        p.player_id, 
+                        p.player_name,
+                        COALESCE(fs.forts_joined, 0) as forts_joined,
+                        COALESCE(fs.forts_launched, 0) as forts_launched,
+                        COALESCE(fs.total_forts, 0) as total_forts,
+                        COALESCE(fs.penalties, 0) as penalties
+                    FROM (
+                        SELECT DISTINCT player_id, player_name 
+                        FROM fort_stats 
+                        WHERE kvk_name = ?
+                    ) p
+                    LEFT JOIN fort_stats fs 
+                        ON p.player_id = fs.player_id 
+                        AND fs.kvk_name = ? 
+                        AND fs.period_key = ?
                     ORDER BY total_forts DESC
-                ''', (kvk_name, period_key))
+                ''', (kvk_name, kvk_name, period_key))
                 
             return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
         logger.error(f"Error getting fort leaderboard: {e}")
         return []
+
+def get_fort_last_updated(kvk_name: str, period_key: str = "total"):
+    """Returns the ISO timestamp of the last update for this period (or newest if total)."""
+    try:
+        with closing(get_connection()) as conn:
+            cursor = conn.cursor()
+            if period_key == "total":
+                cursor.execute("SELECT MAX(created_at) FROM fort_periods WHERE kvk_name = ?", (kvk_name,))
+            else:
+                cursor.execute("SELECT created_at FROM fort_periods WHERE kvk_name = ? AND period_key = ?", (kvk_name, period_key))
+            
+            row = cursor.fetchone()
+            return row[0] if row else None
+    except Exception as e:
+        logger.error(f"Error getting fort last updated: {e}")
+        return None
+
+def get_latest_fort_activity():
+    """Returns the (kvk_name, period_key) of the most recently created fort period."""
+    try:
+        with closing(get_connection()) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT kvk_name, period_key FROM fort_periods ORDER BY created_at DESC LIMIT 1")
+            row = cursor.fetchone()
+            return (row[0], row[1]) if row else (None, None)
+    except Exception as e:
+        logger.error(f"Error getting latest fort activity: {e}")
+        return None, None
 
 def get_fort_seasons():
     """Returns a list of all unique seasons (kvk_name) in fort_stats."""

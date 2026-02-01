@@ -2,15 +2,19 @@ import discord
 from database import database_manager as db_manager
 
 class FortLeaderboardPaginationView(discord.ui.View):
-    # ... existing code ...
-    def __init__(self, data, title, kvk_name):
+    def __init__(self, data, title, kvk_name, period_key="total"):
         super().__init__(timeout=180)
         self.data = data
         self.title = title
         self.kvk_name = kvk_name
+        self.period_key = period_key
         self.per_page = 10
         self.current_page = 0
         self.total_pages = (len(data) - 1) // self.per_page + 1
+        
+        # Get last updated time
+        self.last_updated = db_manager.get_fort_last_updated(kvk_name, period_key)
+        
         self.update_buttons()
 
     def create_embed(self):
@@ -42,7 +46,17 @@ class FortLeaderboardPaginationView(discord.ui.View):
             leaderboard_text = "No data available"
 
         embed.add_field(name=f"Leaderboard (Page {self.current_page + 1}/{self.total_pages})", value=leaderboard_text, inline=False)
-        embed.set_footer(text=f"Total players: {len(self.data)}")
+        
+        footer_text = f"Total players: {len(self.data)}"
+        if self.last_updated:
+            # Format timestamp nicely (it's stored as ISO usually)
+            try:
+                dt = discord.utils.parse_time(self.last_updated) or datetime.fromisoformat(self.last_updated)
+                footer_text += f" | Last Updated: {dt.strftime('%d/%m/%Y %H:%M')}"
+            except:
+                footer_text += f" | Last Updated: {self.last_updated}"
+                
+        embed.set_footer(text=footer_text)
         return embed
 
     def update_buttons(self):
@@ -64,19 +78,30 @@ class FortLeaderboardPaginationView(discord.ui.View):
 
 
 class FortStatsView(discord.ui.View):
-    def __init__(self, player_id, player_name, current_season, current_period, fort_cog):
+    def __init__(self, player_id, player_name, current_season, current_period, fort_cog, accounts=None):
         super().__init__(timeout=300)
         self.player_id = player_id
         self.player_name = player_name
         self.selected_season = current_season
         self.selected_period = current_period
         self.fort_cog = fort_cog
+        self.accounts = accounts or []
         self.update_components()
 
     def update_components(self):
         self.clear_items()
         
-        # Season Select
+        # 1. Accounts Buttons (Row 0)
+        if len(self.accounts) > 1:
+            for acc in self.accounts:
+                label = f"{acc['account_type'].capitalize()} ({acc['player_name']})"
+                style = discord.ButtonStyle.primary if acc['player_id'] == self.player_id else discord.ButtonStyle.secondary
+                
+                button = discord.ui.Button(label=label, style=style, custom_id=f"acc_{acc['player_id']}", row=0)
+                button.callback = self.create_account_callback(acc['player_id'], acc['player_name'])
+                self.add_item(button)
+
+        # 2. Season Select (Row 1)
         seasons = db_manager.get_fort_seasons()
         if seasons:
             season_options = [
@@ -86,11 +111,11 @@ class FortStatsView(discord.ui.View):
                     default=(s == self.selected_season)
                 ) for s in seasons[:25]
             ]
-            season_select = discord.ui.Select(placeholder="Select season...", options=season_options, row=0)
+            season_select = discord.ui.Select(placeholder="Select season...", options=season_options, row=1)
             season_select.callback = self.season_callback
             self.add_item(season_select)
             
-        # Period Select
+        # 3. Period Select (Row 2)
         periods = db_manager.get_fort_periods(self.selected_season)
         period_options = [
             discord.SelectOption(
@@ -108,9 +133,16 @@ class FortStatsView(discord.ui.View):
                 )
             )
         
-        period_select = discord.ui.Select(placeholder="Select period...", options=period_options, row=1)
+        period_select = discord.ui.Select(placeholder="Select period...", options=period_options, row=2)
         period_select.callback = self.period_callback
         self.add_item(period_select)
+
+    def create_account_callback(self, pid, pname):
+        async def callback(interaction: discord.Interaction):
+            self.player_id = pid
+            self.player_name = pname
+            await self.update_message(interaction)
+        return callback
 
     async def season_callback(self, interaction: discord.Interaction):
         self.selected_season = interaction.data['values'][0]

@@ -44,6 +44,8 @@ class Forts(commands.Cog):
 
     @app_commands.command(name='my_forts', description='Show your fort participation statistics.')
     @app_commands.describe(period="Select a specific period or 'Total'", season="Select a fort season (e.g. Forts_2024)")
+    @app_commands.command(name='my_forts', description='Show your fort participation statistics.')
+    @app_commands.describe(period="Select a specific period or 'Total'", season="Select a fort season (e.g. Forts_2024)")
     async def my_forts(self, interaction: discord.Interaction, period: str = "total", season: str = None):
         await interaction.response.defer()
         
@@ -57,13 +59,23 @@ class Forts(commands.Cog):
         player_id = accounts[0]['player_id']
         player_name = accounts[0]['player_name']
         
-        # Use provided season, or current KvK, or "General"
-        target_season = season if season else (db_manager.get_current_kvk_name() or "General")
+        # Default behavior: If no season/period specified, try to find the latest available data
+        # instead of defaulting to "Current KvK" + "Total" which might be empty.
+        if season is None and period == "total":
+            latest_season, latest_period = db_manager.get_latest_fort_activity()
+            if latest_season and latest_period:
+                target_season = latest_season
+                period = latest_period
+            else:
+                target_season = db_manager.get_current_kvk_name() or "General"
+        else:
+             target_season = season if season else (db_manager.get_current_kvk_name() or "General")
 
         embed, file = await self.get_my_forts_embed_and_file(player_id, player_name, target_season, period)
         
         from .views import FortStatsView
-        view = FortStatsView(player_id, player_name, target_season, period, self)
+        # Pass accounts list for switching buttons
+        view = FortStatsView(player_id, player_name, target_season, period, self, accounts=accounts)
         
         if file:
             await interaction.followup.send(embed=embed, file=file, view=view)
@@ -102,9 +114,17 @@ class Forts(commands.Cog):
             embed.add_field(name="Total", value=f"**{total}**", inline=True)
             
             if period == "total":
+                # For total, we check if there are any penalties (missed periods)
+                if penalties == 0:
+                    status = "✅ Perfect Season"
+                else:
+                    status = f"⚠️ Missed Requirements ({penalties} times)"
+                embed.add_field(name="Season Status", value=status, inline=False)
+            else:
+                # For specific period, check against 35
                 diff = total - req_forts
                 status = "✅ Met" if diff >= 0 else f"❌ Missing {abs(diff)}"
-                embed.add_field(name="Season Status", value=status, inline=False)
+                embed.add_field(name="Period Status", value=status, inline=False)
             
             if penalties > 0:
                 embed.add_field(name="⚠️ Penalties", value=f"{penalties} points", inline=False)
@@ -124,6 +144,15 @@ class Forts(commands.Cog):
                     embed.set_image(url="attachment://fort_dynamics.png")
         else:
             embed.description += f"\n\nNo fort statistics found for this period."
+
+        # Add Last Updated footer
+        last_updated = db_manager.get_fort_last_updated(season, period)
+        if last_updated:
+            try:
+                dt = discord.utils.parse_time(last_updated) or datetime.fromisoformat(last_updated)
+                embed.set_footer(text=f"Last Updated: {dt.strftime('%d/%m/%Y %H:%M')}")
+            except:
+                embed.set_footer(text=f"Last Updated: {last_updated}")
             
         return embed, file
 
@@ -154,7 +183,16 @@ class Forts(commands.Cog):
     async def fort_leaderboard(self, interaction: discord.Interaction, period: str = "total", season: str = None):
         await interaction.response.defer()
         
-        target_season = season if season else (db_manager.get_current_kvk_name() or "General")
+        if season is None and period == "total":
+            latest_season, latest_period = db_manager.get_latest_fort_activity()
+            if latest_season and latest_period:
+                target_season = latest_season
+                period = latest_period
+            else:
+                 target_season = db_manager.get_current_kvk_name() or "General"
+        else:
+            target_season = season if season else (db_manager.get_current_kvk_name() or "General")
+
         data = db_manager.get_fort_leaderboard(target_season, period)
         
         if not data:
