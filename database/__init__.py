@@ -15,7 +15,6 @@ from .kvk import (
     save_requirements_batch,
     set_kvk_dates,
     archive_kvk_data,
-    save_results_batch,
     get_all_seasons,
     get_played_seasons,
     delete_kvk_season,
