@@ -432,7 +432,7 @@ class PlayerListPaginationView(discord.ui.View):
         super().__init__(timeout=300)
         self.data = data
         self.title = title
-        self.per_page = 8
+        self.per_page = 6
         self.current_page = 0
         self.total_pages = (len(data) - 1) // self.per_page + 1
 
