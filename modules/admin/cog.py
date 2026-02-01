@@ -690,6 +690,8 @@ class Admin(commands.Cog):
     @app_commands.command(name="list_players", description="List top players by power (All Seasons).")
     @app_commands.describe(limit="LIMIT IGNORED - Shows all via pagination")
     async def list_players(self, interaction: discord.Interaction, limit: int = 20):
+        # Local import to fix potential NameError in some envs
+        from database import database_manager as db_manager
         await interaction.response.defer()
         
         # Use new global function to get ALL players with latest stats
@@ -720,7 +722,7 @@ class Admin(commands.Cog):
             await interaction.response.send_message("❌ Type must be 'start' or 'end'.", ephemeral=False)
             return
 
-        from db_manager import kvk as kvk_db # Direct import since it's added recently? or via database_manager
+        from database import kvk as kvk_db
         # database_manager is a proxy, need to ensure it exposes delete_snapshot.
         # Actually database_manager.py imports * from .kvk, so it should be there.
         
