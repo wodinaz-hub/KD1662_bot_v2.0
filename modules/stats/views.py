@@ -285,8 +285,8 @@ class UnifiedStatsView(discord.ui.View):
     def update_components(self):
         self.clear_items()
         
-        # 1. Season Selection
-        seasons = db_manager.get_all_seasons()
+        # 1. Season Selection - Only show active/archived seasons
+        seasons = db_manager.get_played_seasons()
         if seasons:
             season_options = [
                 discord.SelectOption(

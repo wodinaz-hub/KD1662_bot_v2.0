@@ -311,7 +311,7 @@ class Stats(commands.Cog):
         # Add comparison if current KvK and period is 'all'
         if kvk_name == db_manager.get_current_kvk_name() and period_key == "all":
             # Find previous KvK
-            seasons = db_manager.get_all_seasons()
+            seasons = db_manager.get_played_seasons()
             prev_kvk = None
             for i, s in enumerate(seasons):
                 if s['value'] == kvk_name and i > 0:
@@ -336,14 +336,42 @@ class Stats(commands.Cog):
                         inline=False
                     )
 
-        # Generate dynamics chart if history exists
+        # Generate requirements gauge (primary chart)
         file = None
-        history = db_manager.get_player_stats_history(player_id, kvk_name)
-        if history and len(history) > 1:
-            chart_buf = graphics.create_player_dynamics_chart(history, stats['player_name'])
+        if requirements:
+            t4 = stats.get('total_t4_kills', 0) or 0
+            t5 = stats.get('total_t5_kills', 0) or 0
+            total_kills = t4 + t5
+            chart_buf = graphics.create_player_stats_card(
+                total_kills, requirements['required_kills'],
+                stats['total_deaths'], requirements['required_deaths'],
+                stats['player_name']
+            )
             if chart_buf:
-                file = discord.File(chart_buf, filename="stats_dynamics.png")
-                embed.set_image(url="attachment://stats_dynamics.png")
+                file = discord.File(chart_buf, filename="stats_card.png")
+                embed.set_image(url="attachment://stats_card.png")
+        
+        # Cross-KvK dynamics chart (only if player has stats in multiple KvKs)
+        # This is shown as a secondary embed image if available
+        played_seasons = db_manager.get_played_seasons()
+        if len(played_seasons) > 1:
+            cross_kvk_stats = []
+            for season in played_seasons[:5]:  # Limit to 5 seasons
+                season_stats = db_manager.get_player_stats_by_period(player_id, season['value'], "all")
+                if season_stats:
+                    cross_kvk_stats.append({
+                        'period_key': season['label'][:15],  # Truncate for chart readability
+                        'kill_points': season_stats.get('total_kill_points', 0) or 0,
+                        'deaths': season_stats.get('total_deaths', 0) or 0,
+                        'power': season_stats.get('total_power', 0) or 0
+                    })
+            
+            # Only create dynamics chart if player has stats in 2+ KvKs
+            if len(cross_kvk_stats) > 1 and not file:
+                chart_buf = graphics.create_player_dynamics_chart(cross_kvk_stats, stats['player_name'])
+                if chart_buf:
+                    file = discord.File(chart_buf, filename="cross_kvk_dynamics.png")
+                    embed.set_image(url="attachment://cross_kvk_dynamics.png")
         
         return embed, file
 
