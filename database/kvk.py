@@ -774,3 +774,43 @@ def get_kingdom_stats(kvk_name: str):
     except Exception as e:
         logger.error(f"Error retrieving kingdom stats: {e}")
         return None
+def get_player_cross_kvk_stats(player_id: int, kvk_names: list) -> list:
+    """
+    Batch retrieves player stats across multiple KvK seasons in a single query.
+    Returns list of dicts with season label and aggregated stats.
+    
+    This is more efficient than calling get_player_stats_by_period() in a loop.
+    """
+    if not kvk_names:
+        return []
+    
+    try:
+        with closing(get_connection()) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # Build IN clause placeholders
+            placeholders = ','.join('?' * len(kvk_names))
+            
+            query = f'''
+                SELECT 
+                    kvk_name,
+                    player_name,
+                    MAX(power) as total_power,
+                    SUM(kill_points) as total_kill_points,
+                    SUM(deaths) as total_deaths,
+                    SUM(t4_kills) as total_t4_kills,
+                    SUM(t5_kills) as total_t5_kills
+                FROM kvk_stats
+                WHERE player_id = ? AND kvk_name IN ({placeholders})
+                GROUP BY kvk_name
+                ORDER BY kvk_name
+            '''
+            
+            cursor.execute(query, [player_id] + kvk_names)
+            rows = cursor.fetchall()
+            
+            return [dict(row) for row in rows]
+    except Exception as e:
+        logger.error(f"Error getting cross-KvK stats: {e}")
+        return []
