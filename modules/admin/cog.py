@@ -687,24 +687,28 @@ class Admin(commands.Cog):
         except ValueError:
             await interaction.response.send_message("❌ ID and Power must be numbers.", ephemeral=False)
 
-    @app_commands.command(name="list_players", description="List top players by power.")
+    @app_commands.command(name="list_players", description="List top players by power (All Seasons).")
     @app_commands.describe(limit="Number of players to show (default 20)")
     async def list_players(self, interaction: discord.Interaction, limit: int = 20):
         await interaction.response.defer()
-        kvk = db_manager.get_current_kvk_name()
-        players = db_manager.get_all_kingdom_players(kvk) if kvk else []
+        
+        # Use new global function to get ALL players with latest stats
+        players = db_manager.get_all_players_global()
         
         if not players:
-            await interaction.followup.send("No players found for current season.")
+            await interaction.followup.send("No players found in database.")
             return
 
         # Sort by power descending
         players.sort(key=lambda x: x.get('power', 0), reverse=True)
         top = players[:limit]
         
-        text = f"**Top {len(top)} Players (Power)**\n"
+        text = f"**Top {len(top)} Players (Global / All Seasons)**\n"
         for i, p in enumerate(top, 1):
-             text += f"{i}. **{p['player_name']}** ({p['player_id']}) - ⚡ {p['power']:,}\n"
+             kp = p.get('kill_points', 0)
+             deaths = p.get('deaths', 0)
+             text += f"{i}. **{p['player_name']}** ({p['player_id']})\n"
+             text += f"   ⚡ {p['power']:,} | ⚔️ KP: {kp:,} | 💀 D: {deaths:,}\n"
              
         # Split if too long
         if len(text) > 2000:

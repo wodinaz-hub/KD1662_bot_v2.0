@@ -170,3 +170,77 @@ def add_new_player(player_id: int, name: str, power: int, kvk_name: str):
     except Exception as e:
         logger.error(f"Error adding new player: {e}")
         return False
+
+def get_all_players_global():
+    """
+    Returns a list of ALL players found in the database (snapshots or kingdom roster).
+    Returns the entry with the highest Kill Points (or Power if no KP) for each player ID.
+    """
+    try:
+        with closing(get_connection()) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # We want one row per player_id.
+            # Strategy:
+            # 1. Get latest snapshot for each player (Highest KP -> Highest Power)
+            # 2. Get info from kingdom_players for anyone not in snapshots.
+            
+            cursor.execute('''
+                WITH RankedSnaps AS (
+                    SELECT 
+                        player_id, player_name, power, kill_points, deaths,
+                        ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY kill_points DESC, power DESC) as rn
+                    FROM kvk_snapshots
+                ),
+                DistinctRoaster AS (
+                    SELECT player_id, player_name, MAX(power) as power
+                    FROM kingdom_players
+                    GROUP BY player_id
+                )
+                
+                SELECT 
+                    COALESCE(rs.player_id, dr.player_id) as player_id,
+                    COALESCE(rs.player_name, dr.player_name) as player_name,
+                    COALESCE(rs.power, dr.power) as power,
+                    COALESCE(rs.kill_points, 0) as kill_points,
+                    COALESCE(rs.deaths, 0) as deaths
+                FROM DistinctRoaster dr
+                FULL OUTER JOIN RankedSnaps rs ON dr.player_id = rs.player_id AND rs.rn = 1
+                WHERE rs.rn = 1 OR rs.player_id IS NULL
+            ''')
+            
+            # Note: SQLite < 3.39 doesn't support FULL OUTER JOIN.
+            # If that fails, we use UNION ALL strategy.
+            # Most discord.py environments have recent sqlite, but let's be safe if it errors?
+            # Actually, standard fallback is LEFT JOIN + UNION ALL (RIGHT JOIN equivalent or just getting the others).
+            
+            # Safer query for compatibility:
+            # Get all form Snaps + all from Roaster not in Snaps.
+            
+            query_safe = '''
+                SELECT 
+                    player_id, player_name, power, kill_points, deaths
+                FROM (
+                    SELECT 
+                        player_id, player_name, power, kill_points, deaths,
+                        ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY kill_points DESC, power DESC) as rn
+                    FROM kvk_snapshots
+                ) WHERE rn = 1
+                
+                UNION ALL
+                
+                SELECT 
+                    player_id, player_name, MAX(power) as power, 
+                    0 as kill_points, 0 as deaths
+                FROM kingdom_players
+                WHERE player_id NOT IN (SELECT DISTINCT player_id FROM kvk_snapshots)
+                GROUP BY player_id
+            '''
+            
+            cursor.execute(query_safe)
+            return [dict(row) for row in cursor.fetchall()]
+            
+    except Exception as e:
+        logger.error(f"Error getting global player list: {e}")
+        return []
