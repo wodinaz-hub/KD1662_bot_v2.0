@@ -49,7 +49,9 @@ from .forts import (
     get_fort_seasons,
     get_fort_stats,
     clear_all_fort_data,
-    delete_fort_period
+    delete_fort_period,
+    get_latest_fort_activity,
+    get_fort_last_updated
 )
 from .players import (
     import_kingdom_players,
