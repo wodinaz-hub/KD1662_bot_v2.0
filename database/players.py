@@ -155,3 +155,18 @@ def unlink_account(discord_id: int, player_id: int):
     except Exception as e:
         logger.error(f"Error unlinking account: {e}")
         return False
+
+def add_new_player(player_id: int, name: str, power: int, kvk_name: str):
+    """Adds or updates a player in the kingdom_players table."""
+    try:
+        with closing(get_connection()) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO kingdom_players (player_id, player_name, power, kvk_name)
+                VALUES (?, ?, ?, ?)
+            ''', (player_id, name, power, kvk_name))
+            conn.commit()
+        return True
+    except Exception as e:
+        logger.error(f"Error adding new player: {e}")
+        return False
