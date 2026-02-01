@@ -74,19 +74,11 @@ class Stats(commands.Cog):
 
     @kingdom_stats.autocomplete('season')
     async def season_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        seasons = db_manager.get_all_seasons()
+        seasons = db_manager.get_played_seasons()
         choices = []
         for s in seasons:
             emoji = "📁" if s['is_archived'] else "⚔️"
             name = f"{emoji} {s['label']}"
-            
-            # Show dates if available
-            if s.get('start_date') and s.get('end_date'):
-                name += f" ({s['start_date']} → {s['end_date']})"
-            elif s.get('start_date'):
-                name += f" (From: {s['start_date']})"
-            elif s.get('end_date'):
-                name += f" (Until: {s['end_date']})"
             
             if current.lower() in name.lower() or current.lower() in s['value'].lower():
                 choices.append(app_commands.Choice(name=name, value=s['value']))
@@ -101,19 +93,11 @@ class Stats(commands.Cog):
     @my_stats.autocomplete('season')
     async def my_stats_season_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         """Autocomplete for season parameter - reuse the same logic as kingdom_stats"""
-        seasons = db_manager.get_all_seasons()
+        seasons = db_manager.get_played_seasons()
         choices = []
         for s in seasons:
             emoji = "📁" if s.get('is_archived') else "⚔️"
             name = f"{emoji} {s['label']}"
-            
-            # Show dates if available
-            if s.get('start_date') and s.get('end_date'):
-                name += f" ({s['start_date']} → {s['end_date']})"
-            elif s.get('start_date'):
-                name += f" (From: {s['start_date']})"
-            elif s.get('end_date'):
-                name += f" (Until: {s['end_date']})"
             
             if current.lower() in name.lower() or current.lower() in s['value'].lower():
                 choices.append(app_commands.Choice(name=name, value=s['value']))
