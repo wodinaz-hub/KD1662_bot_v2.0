@@ -44,8 +44,6 @@ class Forts(commands.Cog):
 
     @app_commands.command(name='my_forts', description='Show your fort participation statistics.')
     @app_commands.describe(period="Select a specific period or 'Total'", season="Select a fort season (e.g. Forts_2024)")
-    @app_commands.command(name='my_forts', description='Show your fort participation statistics.')
-    @app_commands.describe(period="Select a specific period or 'Total'", season="Select a fort season (e.g. Forts_2024)")
     async def my_forts(self, interaction: discord.Interaction, period: str = "total", season: str = None):
         await interaction.response.defer()
         
