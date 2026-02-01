@@ -356,6 +356,40 @@ def get_current_kvk_name():
         logger.error(f"Error getting current KvK name: {e}")
         return "Not set"
 
+def create_kvk_season(name: str, start_date: str = None, end_date: str = None, make_active: bool = True):
+    """Creates a new KvK season with optional dates and sets it as active."""
+    try:
+        # Generate a value (key) from the name
+        value = name.lower().replace(" ", "_").replace("-", "_").replace("(", "").replace(")", "")
+        
+        with closing(get_connection()) as conn:
+            cursor = conn.cursor()
+            
+            # Check if season already exists
+            cursor.execute("SELECT 1 FROM kvk_seasons WHERE value = ?", (value,))
+            if cursor.fetchone():
+                return False, f"Season with key `{value}` already exists."
+            
+            # Reset all active flags if making this one active
+            if make_active:
+                cursor.execute("UPDATE kvk_seasons SET is_active = 0")
+            
+            # Insert new season
+            cursor.execute('''
+                INSERT INTO kvk_seasons (value, label, start_date, end_date, is_active, is_archived)
+                VALUES (?, ?, ?, ?, ?, 0)
+            ''', (value, name, start_date, end_date, 1 if make_active else 0))
+            
+            # Also update kvk_settings if making active
+            if make_active:
+                cursor.execute("INSERT OR REPLACE INTO kvk_settings (setting_key, setting_value) VALUES ('current_kvk', ?)", (value,))
+            
+            conn.commit()
+        return True, f"Season **{name}** created successfully! (Key: `{value}`)"
+    except Exception as e:
+        logger.error(f"Error creating KvK season: {e}")
+        return False, str(e)
+
 def set_current_kvk_name(kvk_name: str):
     """Sets the current KvK name in the database."""
     try:

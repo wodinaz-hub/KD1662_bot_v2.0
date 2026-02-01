@@ -20,6 +20,7 @@ from .kvk import (
     delete_kvk_season,
     rename_kvk_season,
     seed_seasons,
+    create_kvk_season,
     get_current_kvk_name,
     set_current_kvk_name,
     get_player_stats_by_period,

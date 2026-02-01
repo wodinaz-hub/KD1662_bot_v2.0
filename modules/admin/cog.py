@@ -170,6 +170,43 @@ class Admin(commands.Cog):
         file = discord.File(io.BytesIO(output.getvalue().encode()), filename="admin_logs.csv")
         await interaction.response.send_message(f"Found {len(logs)} logs.", file=file, ephemeral=False)
 
+    @app_commands.command(name="create_kvk_season", description="🆕 Create a new KvK season with custom name and dates.")
+    @app_commands.describe(
+        name="Full name for the season (e.g. 'KvK 22 - Tides of War')",
+        start_date="Start date (YYYY-MM-DD, optional)",
+        end_date="End date (YYYY-MM-DD, optional)"
+    )
+    @app_commands.default_permissions(administrator=True)
+    async def create_kvk_season(self, interaction: discord.Interaction, name: str, start_date: str = None, end_date: str = None):
+        if not self.is_admin(interaction):
+            await interaction.response.send_message("You do not have permissions.", ephemeral=False)
+            return
+        
+        # Validate dates if provided
+        if start_date:
+            try:
+                from datetime import datetime
+                datetime.strptime(start_date, "%Y-%m-%d")
+            except ValueError:
+                await interaction.response.send_message("❌ Invalid start date format. Use YYYY-MM-DD.", ephemeral=False)
+                return
+        
+        if end_date:
+            try:
+                from datetime import datetime
+                datetime.strptime(end_date, "%Y-%m-%d")
+            except ValueError:
+                await interaction.response.send_message("❌ Invalid end date format. Use YYYY-MM-DD.", ephemeral=False)
+                return
+        
+        success, msg = db_manager.create_kvk_season(name, start_date, end_date, make_active=True)
+        
+        if success:
+            await interaction.response.send_message(f"✅ {msg}\n\n📅 Dates: {start_date or 'Not set'} → {end_date or 'Not set'}\n⚔️ Status: **ACTIVE**", ephemeral=False)
+            await self.log_to_channel(interaction, "Create KvK Season", f"Name: {name}\nStart: {start_date}\nEnd: {end_date}")
+        else:
+            await interaction.response.send_message(f"❌ Failed: {msg}", ephemeral=False)
+
     @app_commands.command(name="set_kvk", description="Sets the current KvK season (admin only).")
     @app_commands.default_permissions(administrator=True)
     async def set_kvk_command(self, interaction: discord.Interaction):
