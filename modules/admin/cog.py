@@ -11,7 +11,7 @@ from .views import (
     AdminPanelView, KvKSelectView, FinishKvKConfirmView, 
     ResetBotConfirmView, ClearFortsConfirmView, WizardKvKSelectView,
     DeletePlayerConfirmView, DeleteKvKConfirmView, LeaderboardPaginationView,
-    LinkedAccountsPaginationView, CompliancePaginationView
+    LinkedAccountsPaginationView, CompliancePaginationView, PlayerListPaginationView
 )
 from .modals import RequirementsModal, GlobalRequirementsModal
 
@@ -688,7 +688,7 @@ class Admin(commands.Cog):
             await interaction.response.send_message("❌ ID and Power must be numbers.", ephemeral=False)
 
     @app_commands.command(name="list_players", description="List top players by power (All Seasons).")
-    @app_commands.describe(limit="Number of players to show (default 20)")
+    @app_commands.describe(limit="LIMIT IGNORED - Shows all via pagination")
     async def list_players(self, interaction: discord.Interaction, limit: int = 20):
         await interaction.response.defer()
         
@@ -701,20 +701,10 @@ class Admin(commands.Cog):
 
         # Sort by power descending
         players.sort(key=lambda x: x.get('power', 0), reverse=True)
-        top = players[:limit]
         
-        text = f"**Top {len(top)} Players (Global / All Seasons)**\n"
-        for i, p in enumerate(top, 1):
-             kp = p.get('kill_points', 0)
-             deaths = p.get('deaths', 0)
-             text += f"{i}. **{p['player_name']}** ({p['player_id']})\n"
-             text += f"   ⚡ {p['power']:,} | ⚔️ KP: {kp:,} | 💀 D: {deaths:,}\n"
-             
-        # Split if too long
-        if len(text) > 2000:
-            text = text[:1900] + "\n...(truncated)"
-            
-        await interaction.followup.send(text)
+        view = PlayerListPaginationView(players, "🌍 Global Player List")
+        view.update_buttons()
+        await interaction.followup.send(embed=view.create_embed(), view=view)
 
     @app_commands.command(name="delete_snapshot", description="⚠️ Delete a specific snapshot batch.")
     @app_commands.describe(period="Period key (e.g. week_1)", type="start or end", kvk="Optional KvK name")

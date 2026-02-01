@@ -427,6 +427,57 @@ class CompliancePaginationView(discord.ui.View):
         self.update_buttons()
         await interaction.response.edit_message(embed=self.create_embed(), view=self)
 
+class PlayerListPaginationView(discord.ui.View):
+    def __init__(self, data, title):
+        super().__init__(timeout=300)
+        self.data = data
+        self.title = title
+        self.per_page = 15
+        self.current_page = 0
+        self.total_pages = (len(data) - 1) // self.per_page + 1
+
+    def create_embed(self):
+        start = self.current_page * self.per_page
+        end = start + self.per_page
+        page_data = self.data[start:end]
+        
+        embed = discord.Embed(
+            title=f"{self.title}",
+            description="**Format:** ID | Name | Power | KP | Deaths",
+            color=discord.Color.blue()
+        )
+        
+        text = ""
+        for i, p in enumerate(page_data, start + 1):
+            kp = p.get('kill_points', 0)
+            deaths = p.get('deaths', 0)
+            text += f"{i}. **{p['player_name']}** (`{p['player_id']}`)\n"
+            text += f"   ⚡ {p['power']:,} | ⚔️ {kp:,} | 💀 {deaths:,}\n"
+            
+        if not text:
+            text = "No players found."
+            
+        embed.add_field(name=f"Players (Page {self.current_page + 1}/{self.total_pages})", value=text, inline=False)
+        embed.set_footer(text=f"Total: {len(self.data)} players found across all seasons")
+        return embed
+
+    def update_buttons(self):
+        if len(self.children) >= 2:
+            self.children[0].disabled = self.current_page == 0
+            self.children[1].disabled = self.current_page == self.total_pages - 1
+
+    @discord.ui.button(label="Previous", style=discord.ButtonStyle.primary, disabled=True)
+    async def previous_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page -= 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.create_embed(), view=self)
+
+    @discord.ui.button(label="Next", style=discord.ButtonStyle.primary)
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page += 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.create_embed(), view=self)
+
 class AdminPanelView(discord.ui.View):
     def __init__(self, admin_cog):
         super().__init__(timeout=300)
