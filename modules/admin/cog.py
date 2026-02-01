@@ -274,11 +274,11 @@ class Admin(commands.Cog):
         if not self.is_admin(interaction):
             await interaction.response.send_message("You do not have permissions.", ephemeral=False)
             return
-        seasons = db_manager.get_all_seasons()
+        seasons = db_manager.get_played_seasons()
         if not seasons:
-            await interaction.response.send_message("No seasons found.", ephemeral=False)
+            await interaction.response.send_message("No played/archived seasons found.", ephemeral=False)
             return
-        embed = discord.Embed(title="📅 All KvK Seasons", color=discord.Color.blue())
+        embed = discord.Embed(title="📅 Played KvK Seasons", color=discord.Color.blue())
         for s in seasons:
             status = "ACTIVE" if s.get('is_active') else "Archived" if s.get('is_archived') else "Inactive"
             embed.add_field(name=f"{s['label']} (`{s['value']}`)", value=f"Status: {status}", inline=False)
