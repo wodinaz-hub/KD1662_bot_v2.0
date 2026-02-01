@@ -233,6 +233,20 @@ def archive_kvk_data(current_name: str, archive_name: str):
     try:
         with closing(get_connection()) as conn:
             cursor = conn.cursor()
+            
+            # First, get the original label to preserve it
+            cursor.execute("SELECT label, start_date, end_date FROM kvk_seasons WHERE value = ?", (current_name,))
+            row = cursor.fetchone()
+            original_label = row[0] if row else current_name
+            start_date = row[1] if row else None
+            end_date = row[2] if row else None
+            
+            # Create a display label with dates if available
+            if start_date and end_date:
+                display_label = f"{original_label} ({start_date} - {end_date})"
+            else:
+                display_label = original_label
+            
             # Update stats
             cursor.execute("UPDATE kvk_stats SET kvk_name = ? WHERE kvk_name = ?", (archive_name, current_name))
             # Update snapshots
@@ -243,13 +257,12 @@ def archive_kvk_data(current_name: str, archive_name: str):
             cursor.execute("UPDATE fort_stats SET kvk_name = ? WHERE kvk_name = ?", (archive_name, current_name))
             cursor.execute("UPDATE fort_periods SET kvk_name = ? WHERE kvk_name = ?", (archive_name, current_name))
             
-            # Update season definition
-            # We rename the 'value' and 'label' to the archive name
+            # Update season definition - preserve the label, only update value (key)
             cursor.execute("""
                 UPDATE kvk_seasons 
                 SET value = ?, label = ?, is_active = 0, is_archived = 1 
                 WHERE value = ?
-            """, (archive_name, archive_name, current_name))
+            """, (archive_name, display_label, current_name))
             
             conn.commit()
         return True
