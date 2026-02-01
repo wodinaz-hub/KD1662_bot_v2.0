@@ -398,7 +398,7 @@ def get_current_kvk_name():
     
     return _get_cached('current_kvk', fetch)
 
-def create_kvk_season(name: str, start_date: str = None, end_date: str = None, make_active: bool = True):
+def create_kvk_season(name: str, start_date: str = None, end_date: str = None, make_active: bool = True, copy_global_reqs: bool = True):
     """Creates a new KvK season with optional dates and sets it as active."""
     try:
         with closing(get_connection()) as conn:
@@ -426,9 +426,31 @@ def create_kvk_season(name: str, start_date: str = None, end_date: str = None, m
             if make_active:
                 cursor.execute("INSERT OR REPLACE INTO kvk_settings (setting_key, setting_value) VALUES ('current_kvk', ?)", (value,))
             
+            # Auto-copy global requirements if enabled
+            if copy_global_reqs:
+                from . import admin
+                global_reqs = admin.get_global_requirements_as_list()
+                
+                if global_reqs:
+                    for req in global_reqs:
+                        cursor.execute('''
+                            INSERT INTO kvk_requirements (kvk_name, min_power, max_power, required_kills, required_deaths)
+                            VALUES (?, ?, ?, ?, ?)
+                        ''', (value, req['min_power'], req['max_power'], req['required_kills'], req['required_deaths']))
+                    logger.info(f"Auto-copied {len(global_reqs)} global requirements to new season {value}")
+            
             conn.commit()
         clear_season_cache()  # Clear cache after creating
-        return True, f"Season **{name}** created successfully! (Key: `{value}`)"
+        
+        # Build success message
+        msg = f"Season **{name}** created successfully! (Key: `{value}`)"
+        if copy_global_reqs:
+            from . import admin
+            global_reqs = admin.get_global_requirements_as_list()
+            if global_reqs:
+                msg += f"\n✅ Auto-copied {len(global_reqs)} global requirements."
+        
+        return True, msg
     except Exception as e:
         logger.error(f"Error creating KvK season: {e}")
         return False, str(e)

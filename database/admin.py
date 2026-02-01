@@ -78,6 +78,89 @@ def set_global_requirements(requirements_json: str):
         logger.error(f"Error setting global requirements: {e}")
         return False
 
+
+def get_global_requirements_as_list():
+    """
+    Returns the global requirements as a list of dictionaries.
+    This is used for auto-copying to new KvK seasons.
+    
+    Returns:
+        [
+            {'min_power': 40000000, 'max_power': 44999999, 'required_kills': 2500000, 'required_deaths': 200000},
+            ...
+        ]
+    """
+    try:
+        import json
+        reqs_json = get_global_requirements()
+        if not reqs_json:
+            return []
+        
+        # Parse JSON to list of dicts
+        reqs_list = json.loads(reqs_json)
+        return reqs_list if isinstance(reqs_list, list) else []
+    except Exception as e:
+        logger.error(f"Error parsing global requirements: {e}")
+        return []
+
+
+def set_global_requirements_from_file(file_path: str):
+    """
+    Loads global requirements from an Excel file and saves them.
+    Format: min_power, max_power, required_kills, required_deaths
+    
+    Returns:
+        (success: bool, message: str)
+    """
+    try:
+        import pandas as pd
+        import json
+        
+        df = pd.read_excel(file_path)
+        df.columns = [c.strip().lower() for c in df.columns]
+        
+        # Map column names
+        col_map = {
+            'min_power': ['min power', 'min_power', 'power from'],
+            'max_power': ['max power', 'max_power', 'power to'],
+            'required_kills': ['required kills', 'kills', 'kill goal', 'required_kills', 'required_kill'],
+            'required_deaths': ['required deaths', 'deaths', 'death goal', 'required_deaths', 'required_death']
+        }
+        
+        found_cols = {}
+        for target, variations in col_map.items():
+            for var in variations:
+                if var in df.columns:
+                    found_cols[target] = var
+                    break
+        
+        required = ['min_power', 'max_power', 'required_kills', 'required_deaths']
+        missing = [r for r in required if r not in found_cols]
+        if missing:
+            return False, f"Missing columns: {', '.join(missing)}"
+        
+        # Build requirements list
+        requirements_list = []
+        for _, row in df.iterrows():
+            requirements_list.append({
+                'min_power': int(row[found_cols['min_power']]),
+                'max_power': int(row[found_cols['max_power']]),
+                'required_kills': int(row[found_cols['required_kills']]),
+                'required_deaths': int(row[found_cols['required_deaths']])
+            })
+        
+        # Save as JSON
+        reqs_json = json.dumps(requirements_list)
+        if set_global_requirements(reqs_json):
+            return True, f"Global requirements updated! {len(requirements_list)} brackets loaded."
+        else:
+            return False, "Failed to save global requirements."
+            
+    except Exception as e:
+        logger.error(f"Error loading global requirements from file: {e}")
+        return False, str(e)
+
+
 def reset_all_data():
     """Completely clears the database (deletes all data from tables)."""
     try:

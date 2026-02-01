@@ -175,10 +175,11 @@ class Admin(commands.Cog):
     @app_commands.describe(
         name="Full name for the season (e.g. 'KvK 22 - Tides of War')",
         start_date="Start date (YYYY-MM-DD, optional)",
-        end_date="End date (YYYY-MM-DD, optional)"
+        end_date="End date (YYYY-MM-DD, optional)",
+        copy_requirements="Auto-copy global requirements (default: True)"
     )
     @app_commands.default_permissions(administrator=True)
-    async def create_kvk_season(self, interaction: discord.Interaction, name: str, start_date: str = None, end_date: str = None):
+    async def create_kvk_season(self, interaction: discord.Interaction, name: str, start_date: str = None, end_date: str = None, copy_requirements: bool = True):
         if not self.is_admin(interaction):
             await interaction.response.send_message("You do not have permissions.", ephemeral=False)
             return
@@ -198,7 +199,7 @@ class Admin(commands.Cog):
                 await interaction.response.send_message(f"❌ {error}", ephemeral=False)
                 return
         
-        success, msg = db_manager.create_kvk_season(name, start_date, end_date, make_active=True)
+        success, msg = db_manager.create_kvk_season(name, start_date, end_date, make_active=True, copy_global_reqs=copy_requirements)
         
         if success:
             await interaction.response.send_message(f"✅ {msg}\n\n📅 Dates: {start_date or 'Not set'} → {end_date or 'Not set'}\n⚔️ Status: **ACTIVE**", ephemeral=False)
@@ -604,6 +605,22 @@ class Admin(commands.Cog):
         success = db_manager.import_requirements(file_path, current_kvk)
         os.remove(file_path)
         await ctx.send(f"{'✅' if success else '❌'} Requirements upload {'successful' if success else 'failed'}.")
+
+    @commands.command(name="set_global_requirements_file")
+    async def msg_set_global_requirements_file(self, ctx: commands.Context):
+        if not self.is_admin_ctx(ctx):
+            await ctx.send("❌ You do not have permissions to use this command.")
+            return
+        if not ctx.message.attachments: 
+            await ctx.send("❌ Please attach an Excel file with requirements.")
+            return
+        attachment = ctx.message.attachments[0]
+        file_path = f"temp_uploads/{attachment.filename}"
+        if not os.path.exists("temp_uploads"): os.makedirs("temp_uploads")
+        await attachment.save(file_path)
+        success, msg = db_manager.set_global_requirements_from_file(file_path)
+        os.remove(file_path)
+        await ctx.send(f"{'✅' if success else '❌'} {msg}")
 
     @commands.command(name="upload_players")
     async def msg_upload_players(self, ctx: commands.Context):

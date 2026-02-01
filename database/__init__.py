@@ -68,6 +68,8 @@ from .admin import (
     get_reward_role,
     get_global_requirements,
     set_global_requirements,
+    get_global_requirements_as_list,
+    set_global_requirements_from_file,
     reset_all_data,
     set_last_updated,
     get_last_updated,
