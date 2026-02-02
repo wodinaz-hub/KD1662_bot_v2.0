@@ -56,3 +56,9 @@ htmlcov/
 configs/*.xlsx
 configs/*.xls
 !configs/example_*.xlsx
+
+# Documentation
+instructions_ru.md
+instructions_en.md
+bot_description_ru.md
+bot_description_en.md

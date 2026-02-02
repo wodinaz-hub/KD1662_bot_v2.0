@@ -114,12 +114,13 @@ def get_linked_accounts(discord_id: int):
         with closing(get_connection()) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            # Try to join with kingdom_players or kvk_stats to get a name
+            # Try to join with kingdom_players, kvk_stats, or fort_stats to get a name
             cursor.execute('''
-                SELECT la.*, COALESCE(kp.player_name, ks.player_name, 'Unknown') as player_name
+                SELECT la.*, COALESCE(kp.player_name, ks.player_name, fs.player_name, 'Unknown') as player_name
                 FROM linked_accounts la
                 LEFT JOIN kingdom_players kp ON la.player_id = kp.player_id
                 LEFT JOIN (SELECT player_id, player_name FROM kvk_stats GROUP BY player_id) ks ON la.player_id = ks.player_id
+                LEFT JOIN (SELECT player_id, player_name FROM fort_stats GROUP BY player_id) fs ON la.player_id = fs.player_id
                 WHERE la.discord_id = ?
             ''', (discord_id,))
             return [dict(row) for row in cursor.fetchall()]
@@ -134,10 +135,11 @@ def get_all_linked_accounts_full():
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT la.*, COALESCE(kp.player_name, ks.player_name, 'Unknown') as player_name
+                SELECT la.*, COALESCE(kp.player_name, ks.player_name, fs.player_name, 'Unknown') as player_name
                 FROM linked_accounts la
                 LEFT JOIN kingdom_players kp ON la.player_id = kp.player_id
                 LEFT JOIN (SELECT player_id, player_name FROM kvk_stats GROUP BY player_id) ks ON la.player_id = ks.player_id
+                LEFT JOIN (SELECT player_id, player_name FROM fort_stats GROUP BY player_id) fs ON la.player_id = fs.player_id
             ''')
             return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
