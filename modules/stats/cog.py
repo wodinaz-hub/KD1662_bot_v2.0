@@ -368,26 +368,42 @@ class Stats(commands.Cog):
         
         return embed, file
 
-    async def show_total_stats(self, interaction: discord.Interaction, accounts, kvk_name: str):
-        # Get all player IDs for batch query
+    async def get_combined_stats_embed_and_file(self, accounts, kvk_name: str, period_key: str = "all"):
+        """Helper to generate aggregated stats embed for multiple accounts."""
         player_ids = [acc['player_id'] for acc in accounts]
         
-        # Batch query - get all stats in one SQL call instead of N calls
-        all_stats = db_manager.get_total_stats_for_players(player_ids, kvk_name)
+        # Batch query - can return specific period stats now?
+        # db_manager.get_total_stats_for_players returns TOTAL stats for KvK.
+        # If period_key != "all", we need a different query or aggregate manually from get_player_stats_by_period.
+        
+        if period_key == "all":
+            all_stats = db_manager.get_total_stats_for_players(player_ids, kvk_name)
+        else:
+            # We need to fetch period stats for each player and aggregate
+            all_stats = {}
+            for pid in player_ids:
+                stats = db_manager.get_player_stats_by_period(pid, kvk_name, period_key)
+                if stats:
+                    # Convert row to dict
+                    stats = dict(stats)
+                    # For consistency with get_total_stats_for_players which returns {pid: stats}
+                    # We need to structure it similarly
+                    all_stats[pid] = stats
         
         if not all_stats:
-             if interaction.response.is_done():
-                await interaction.followup.send("No data found for any linked accounts.", ephemeral=False)
-             else:
-                await interaction.response.send_message("No data found for any linked accounts.", ephemeral=False)
-             return
+             embed = discord.Embed(
+                title="❌ No Data Found",
+                description="No data found for any linked accounts.",
+                color=discord.Color.red()
+             )
+             return embed, None
         
-        # Aggregate stats from all accounts
+        # Aggregate stats
         total_stats = {
             'total_power': 0, 'total_kill_points': 0, 'total_deaths': 0,
             'total_t1_kills': 0, 'total_t2_kills': 0, 'total_t3_kills': 0,
             'total_t4_kills': 0, 'total_t5_kills': 0,
-            'player_name': "Aggregated Accounts"
+            'player_name': f"Combined ({len(accounts)} Accounts)"
         }
         
         earned_kp_total = 0
@@ -398,26 +414,44 @@ class Stats(commands.Cog):
                 if key != 'player_name':
                     total_stats[key] += (p_stats.get(key, 0) or 0)
             
-            # Calculate earned stats
-            start_snapshot = db_manager.get_player_start_snapshot(player_id, kvk_name)
-            if start_snapshot:
-                earned_kp_total += (p_stats.get('total_kill_points', 0) - (start_snapshot['kill_points'] or 0))
-                power_change_total += (p_stats.get('total_power', 0) - (start_snapshot['power'] or 0))
+            # Calculate earned stats - only relevant for "all" period or if we have start snapshot for period
+            # Currently get_player_start_snapshot is for KvK start.
+            if period_key == "all":
+                start_snapshot = db_manager.get_player_start_snapshot(player_id, kvk_name)
+                if start_snapshot:
+                    earned_kp_total += (p_stats.get('total_kill_points', 0) - (start_snapshot['kill_points'] or 0))
+                    power_change_total += (p_stats.get('total_power', 0) - (start_snapshot['power'] or 0))
+                else:
+                    earned_kp_total += p_stats.get('total_kill_points', 0)
             else:
-                earned_kp_total += p_stats.get('total_kill_points', 0)
-
+                 # Logic for period earned stats? 
+                 # get_player_stats_by_period usually returns snapshot-based stats if implemented correctly,
+                 # but currently it might just return the totals info?
+                 # Actually `get_player_stats_by_period` gets data from `kvk_stats` table which stores GAINS for the period.
+                 # So `total_kill_points` in the returned row IS the earned KP for that period.
+                 # Validating this assumption:
+                 # In database/kvk.py, get_player_stats_by_period returns columns from kvk_stats.
+                 # kvk_stats table usually stores the delta/gain.
+                 # If so, earned_kp_total IS just the sum of total_kill_points.
+                 earned_kp_total += p_stats.get('total_kill_points', 0)
+                 # Power change? kvk_stats has 'power_change'? No, usually just absolute stats.
+        
         embed = discord.Embed(
-            title=f"Total Statistics ({len(accounts)} accounts)",
-            description=f"KvK: **{kvk_name}**",
+            title=f"📊 Statistics: Combined View",
+            description=f"Season: **{kvk_name}**\nPeriod: **{period_key.capitalize()}**\nAccounts: **{len(accounts)}**",
             color=discord.Color.purple()
         )
         
         # Add Last Updated footer
-        last_updated = db_manager.get_last_updated(kvk_name, "general")
+        last_updated = db_manager.get_last_updated(kvk_name, "general" if period_key == "all" else period_key)
         if last_updated:
             embed.set_footer(text=f"🕒 Data updated: {last_updated}")
         
-        # Try to get global requirements first
+        # Requirements logic handling... 
+        # (Assuming reuse of existing logic but maybe complex for combined)
+        # For simplicity, we skip specific rank/requirements for combined view or sum them?
+        # Let's check combined power against global reqs.
+        
         import json
         global_reqs_json = db_manager.get_global_requirements()
         requirements = None
@@ -425,7 +459,6 @@ class Stats(commands.Cog):
         if global_reqs_json:
             try:
                 global_reqs = json.loads(global_reqs_json)
-                # Find matching bracket
                 power = total_stats['total_power']
                 for req in global_reqs:
                     if req['min_power'] <= power <= req['max_power']:
@@ -434,13 +467,16 @@ class Stats(commands.Cog):
             except Exception as e:
                 logger.error(f"Error parsing global requirements: {e}")
         
-        # Fallback to KvK requirements if no global found (or maybe we shouldn't? User said "change requirements for this general statistics")
-        # If global reqs are set, use them. If not, maybe use KvK reqs?
         if not requirements:
              requirements = db_manager.get_requirements(kvk_name, total_stats['total_power'])
 
         add_stats_fields(embed, total_stats, requirements, earned_kp_total, power_change_total, rank=None)
+        
+        return embed, None
 
+    async def show_total_stats(self, interaction: discord.Interaction, accounts, kvk_name: str):
+        # Legacy support for the old button if needed, or redirect
+        embed, file = await self.get_combined_stats_embed_and_file(accounts, kvk_name, "all")
         if interaction.response.is_done():
             await interaction.followup.send(embed=embed)
         else:

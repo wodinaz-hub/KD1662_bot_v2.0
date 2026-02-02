@@ -23,7 +23,7 @@ class NotificationManager:
                 logger.error(f"Could not find notification channel {self.channel_id}: {e}")
                 return
 
-        content = "<@&1239286227317030912>" if tag_role else None
+        content = None # Role ping removed by user request
         embed = discord.Embed(title=title, description=description, color=color)
         if fields:
             for name, value in fields.items():

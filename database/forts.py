@@ -23,8 +23,10 @@ def import_fort_stats(stats_list: list, period_label: str = "Total"):
             
             # 1. Register the period
             cursor.execute('''
-                INSERT OR IGNORE INTO fort_periods (kvk_name, period_key, period_label)
-                VALUES (?, ?, ?)
+                INSERT INTO fort_periods (kvk_name, period_key, period_label, created_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(kvk_name, period_key) DO UPDATE SET
+                    created_at = CURRENT_TIMESTAMP
             ''', (kvk_name, period_key, period_label))
             
             # 2. Insert stats

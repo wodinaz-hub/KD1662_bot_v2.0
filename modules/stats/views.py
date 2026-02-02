@@ -341,9 +341,34 @@ class UnifiedStatsView(discord.ui.View):
                     
                     btn.callback = make_callback(acc['player_id'])
                     self.add_item(btn)
+                
+                # Add Combined Button if using buttons
+                style = discord.ButtonStyle.primary if self.selected_player_id == -1 else discord.ButtonStyle.success
+                btn = discord.ui.Button(label="Total (All)", style=style, row=2, emoji="👥")
+                
+                def make_combined_callback():
+                    async def callback(interaction: discord.Interaction):
+                        self.selected_player_id = -1
+                        await self.update_message(interaction)
+                    return callback
+                    
+                btn.callback = make_combined_callback()
+                self.add_item(btn)
             else:
                 # Use Select Menu for > 5 accounts
                 options = []
+                
+                # Add "All Accounts" option first if multiple accounts
+                if len(self.accounts) > 1:
+                    is_selected = (self.selected_player_id == -1)
+                    options.append(discord.SelectOption(
+                        label="Combined (All Accounts)",
+                        value="-1",
+                        default=is_selected,
+                        emoji="👥",
+                        description="View aggregated stats"
+                    ))
+                
                 for acc in self.accounts:
                     is_selected = (acc['player_id'] == self.selected_player_id)
                     label = f"{acc['account_type'].capitalize()}: {acc['player_name']}"
@@ -376,9 +401,14 @@ class UnifiedStatsView(discord.ui.View):
         await interaction.response.defer()
         
         # Get new embed and file
-        embed, file = await self.stats_cog.get_player_stats_embed_and_file(
-            self.selected_player_id, self.selected_season, self.selected_period
-        )
+        if self.selected_player_id == -1:
+             embed, file = await self.stats_cog.get_combined_stats_embed_and_file(
+                self.accounts, self.selected_season, self.selected_period
+             )
+        else:
+             embed, file = await self.stats_cog.get_player_stats_embed_and_file(
+                self.selected_player_id, self.selected_season, self.selected_period
+             )
         
         self.update_components()
         
