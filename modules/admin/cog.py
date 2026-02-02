@@ -747,3 +747,75 @@ class Admin(commands.Cog):
              await self.log_to_channel(interaction, "Delete Fort Period", f"KvK: {target_kvk}, Period: {period}")
         else:
              await interaction.response.send_message("❌ Failed to delete fort period (or none found).", ephemeral=False)
+
+    @app_commands.command(name="check_player", description="Admin: View stats or forts for ANY player ID.")
+    @app_commands.describe(player_id="Game ID to check", type="stats or forts", season="Optional Season")
+    @app_commands.default_permissions(administrator=True)
+    async def check_player(self, interaction: discord.Interaction, player_id: str, type: str = "stats", season: str = None):
+        if not self.is_admin(interaction):
+            await interaction.response.send_message("❌ Permissions denied.", ephemeral=False)
+            return
+        
+        try: 
+            pid = int(player_id)
+        except ValueError:
+            await interaction.response.send_message("❌ Player ID must be a number.", ephemeral=False)
+            return
+            
+        await interaction.response.defer()
+        
+        target_kvk = season or db_manager.get_current_kvk_name()
+        
+        # Get player name
+        player_name = f"ID: {pid}"
+        # Try to find name in DB
+        # We can use get_player_stats_by_period to check if exists, but name might be in there
+        # Or just use the helpers which handle "No Data" gracefully.
+        
+        if type.lower() == "stats":
+            stats_cog = self.bot.get_cog("Stats")
+            if not stats_cog:
+                await interaction.followup.send("❌ Stats module not loaded.")
+                return
+            
+            embed, file = await stats_cog.get_player_stats_embed_and_file(pid, target_kvk, "all")
+            if file:
+                await interaction.followup.send(embed=embed, file=file)
+            else:
+                await interaction.followup.send(embed=embed)
+                
+        elif type.lower() == "forts":
+            forts_cog = self.bot.get_cog("Forts")
+            if not forts_cog:
+                await interaction.followup.send("❌ Forts module not loaded.")
+                return
+            
+            # Need player name for fort view title usually, but let's try to fetch it
+            # get_my_forts_embed_and_file takes player_name kwarg
+            # We can try to fetch name from players table
+            conn = db_manager.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM players WHERE player_id = ?", (pid,))
+            row = cursor.fetchone()
+            if row:
+                player_name = row[0]
+            conn.close()
+            
+            embed, file = await forts_cog.get_my_forts_embed_and_file(pid, player_name, target_kvk, "total")
+            if file:
+                await interaction.followup.send(embed=embed, file=file)
+            else:
+                await interaction.followup.send(embed=embed)
+                
+        else:
+             await interaction.followup.send("❌ Invalid type. Use 'stats' or 'forts'.")
+
+    @check_player.autocomplete('season')
+    async def check_player_season_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        seasons = db_manager.get_played_seasons()
+        return [app_commands.Choice(name=s['label'], value=s['value']) for s in seasons if current.lower() in s['label'].lower()][:25]
+
+    @check_player.autocomplete('type')
+    async def check_player_type_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        options = ["stats", "forts"]
+        return [app_commands.Choice(name=o, value=o) for o in options if current.lower() in o.lower()]
