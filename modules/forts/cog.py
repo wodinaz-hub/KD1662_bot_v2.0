@@ -80,6 +80,79 @@ class Forts(commands.Cog):
         else:
             await interaction.followup.send(embed=embed, view=view)
 
+    async def get_combined_forts_embed_and_file(self, accounts, season, period):
+        """Helper to generate aggregated fort stats embed for multiple accounts."""
+        player_ids = [acc['player_id'] for acc in accounts]
+        
+        # Aggregate stats manually
+        aggregated = {
+            'joined': 0, 'launched': 0, 'total': 0, 'penalties': 0
+        }
+        
+        found_data = False
+        
+        # Fetch stats for each player
+        for pid in player_ids:
+            # Reusing existing logic? 
+            # get_my_forts_embed_and_file uses db_manager.get_fort_leaderboard to find stats.
+            # But we can use db_manager.get_fort_stats(pid, season) for total/period specific?
+            # Actually db_manager.get_fort_leaderboard returns list for the period.
+            
+            if period == "total":
+                leaderboard = db_manager.get_fort_leaderboard(season, "total")
+                stats = next((p for p in leaderboard if p['player_id'] == pid), None)
+            else:
+                leaderboard = db_manager.get_fort_leaderboard(season, period)
+                stats = next((p for p in leaderboard if p['player_id'] == pid), None)
+            
+            if stats:
+                found_data = True
+                aggregated['joined'] += stats['forts_joined']
+                aggregated['launched'] += stats['forts_launched']
+                aggregated['total'] += stats['total_forts']
+                aggregated['penalties'] += stats['penalties']
+
+        if not found_data:
+             embed = discord.Embed(
+                title=f"🏰 Fort Statistics: Combined View",
+                description=f"Season: **{season}**\n\nNo fort statistics found for any linked accounts.",
+                color=discord.Color.red()
+             )
+             return embed, None
+
+        # Period Label
+        if period == "total":
+            period_label = "Total (All Periods)"
+        else:
+            periods = db_manager.get_fort_periods(season)
+            period_label = next((p['period_label'] for p in periods if p['period_key'] == period), period)
+
+        embed = discord.Embed(
+            title=f"🏰 Fort Statistics: Combined View", 
+            description=f"Season: **{season}**\nPeriod: **{period_label}**\nAccounts: **{len(accounts)}**",
+            color=discord.Color.dark_orange()
+        )
+        
+        embed.add_field(name="Joined", value=str(aggregated['joined']), inline=True)
+        embed.add_field(name="Completed", value=str(aggregated['launched']), inline=True)
+        embed.add_field(name="Total", value=f"**{aggregated['total']}**", inline=True)
+        
+        # No Status logic requested for combined view
+        
+        if aggregated['penalties'] > 0:
+             embed.add_field(name="⚠️ Total Penalties", value=f"{aggregated['penalties']} points", inline=False)
+             
+        # Add Last Updated footer
+        last_updated = db_manager.get_fort_last_updated(season, period)
+        if last_updated:
+            try:
+                dt = discord.utils.parse_time(last_updated) or datetime.fromisoformat(last_updated)
+                embed.set_footer(text=f"Last Updated: {dt.strftime('%d/%m/%Y %H:%M')}")
+            except:
+                embed.set_footer(text=f"Last Updated: {last_updated}")
+            
+        return embed, None
+
     async def get_my_forts_embed_and_file(self, player_id, player_name, season, period):
         """Helper to generate the embed and dynamics chart for a player."""
         if period == "total":

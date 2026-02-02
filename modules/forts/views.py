@@ -119,9 +119,26 @@ class FortStatsView(discord.ui.View):
                     button = discord.ui.Button(label=label, style=style, custom_id=f"acc_{acc['player_id']}", row=0)
                     button.callback = self.create_account_callback(acc['player_id'], acc['player_name'])
                     self.add_item(button)
+                    
+                # Add Combined Button for small list
+                style = discord.ButtonStyle.primary if self.player_id == -1 else discord.ButtonStyle.success
+                btn = discord.ui.Button(label="Total (All)", style=style, row=0, emoji="👥")
+                btn.callback = self.create_account_callback(-1, "Combined")
+                self.add_item(btn)
             else:
                 # Use Select Menu for many accounts (prevents overflow)
                 options = []
+                # Add "All Accounts" option first
+                if len(self.accounts) > 1:
+                    is_selected = (self.player_id == -1)
+                    options.append(discord.SelectOption(
+                        label="Combined (All Accounts)",
+                        value="-1",
+                        default=is_selected,
+                        emoji="👥",
+                        description="View aggregated stats"
+                    ))
+                
                 for acc in self.accounts:
                     is_selected = (acc['player_id'] == self.player_id)
                     label = f"{acc['account_type'].capitalize()}: {acc['player_name']}"
@@ -182,6 +199,13 @@ class FortStatsView(discord.ui.View):
     async def account_select_callback(self, interaction: discord.Interaction):
         # Callback for the account select dropdown
         selected_pid = int(interaction.data['values'][0])
+        
+        if selected_pid == -1:
+            self.player_id = -1
+            self.player_name = "Combined"
+            await self.update_message(interaction)
+            return
+
         # Find player name
         acc = next((a for a in self.accounts if a['player_id'] == selected_pid), None)
         if acc:
@@ -199,9 +223,14 @@ class FortStatsView(discord.ui.View):
         await self.update_message(interaction)
 
     async def update_message(self, interaction: discord.Interaction):
-        embed, file = await self.fort_cog.get_my_forts_embed_and_file(
-            self.player_id, self.player_name, self.selected_season, self.selected_period
-        )
+        if self.player_id == -1:
+             embed, file = await self.fort_cog.get_combined_forts_embed_and_file(
+                self.accounts, self.selected_season, self.selected_period
+             )
+        else:
+             embed, file = await self.fort_cog.get_my_forts_embed_and_file(
+                self.player_id, self.player_name, self.selected_season, self.selected_period
+             )
         self.update_components()
         
         if file:
