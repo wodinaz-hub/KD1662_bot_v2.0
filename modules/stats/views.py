@@ -32,11 +32,11 @@ class LinkAccountModal(discord.ui.Modal, title="Link Account"):
 
         if success:
             await interaction.response.send_message(
-                f"✅ Game ID `{p_id}` successfully linked as **{self.account_type.capitalize()}**.", ephemeral=False)
+                f"✅ Game ID `{p_id}` successfully linked as **{self.account_type.capitalize()}**.", ephemeral=True)
             await self.stats_cog.log_to_channel(interaction, "Link Account", f"ID: {p_id}\nType: {self.account_type}")
         else:
             await interaction.response.send_message(
-                "❌ An error occurred while linking the account. Please try again.", ephemeral=False)
+                "❌ An error occurred while linking the account. Please try again.", ephemeral=True)
             await self.stats_cog.log_to_channel(interaction, "Link Account Failed", f"ID: {p_id}\nType: {self.account_type}")
 
 
@@ -250,7 +250,7 @@ class StartView(discord.ui.View):
 
     @discord.ui.button(label="Link Account", style=discord.ButtonStyle.primary, emoji="🔗")
     async def link_account(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("Select account type to link:", view=LinkAccountView(self.stats_cog), ephemeral=False)
+        await interaction.response.send_message("Select account type to link:", view=LinkAccountView(self.stats_cog), ephemeral=True)
 
     @discord.ui.button(label="My Stats", style=discord.ButtonStyle.success, emoji="📊")
     async def my_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
