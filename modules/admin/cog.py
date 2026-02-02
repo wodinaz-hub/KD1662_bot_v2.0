@@ -13,6 +13,8 @@ from .views import (
     DeletePlayerConfirmView, DeleteKvKConfirmView, LeaderboardPaginationView,
     LinkedAccountsPaginationView, CompliancePaginationView, PlayerListPaginationView
 )
+from modules.stats.views import UnifiedStatsView
+from modules.forts.views import FortStatsView
 from .modals import RequirementsModal, GlobalRequirementsModal
 
 logger = logging.getLogger('discord_bot.admin')
@@ -773,16 +775,59 @@ class Admin(commands.Cog):
         # Or just use the helpers which handle "No Data" gracefully.
         
         if type.lower() == "stats":
+            pass # We handle logic below to avoid duplicate fetching of name
+        elif type.lower() == "forts":
+            pass
+        else:
+             await interaction.followup.send("❌ Invalid type. Use 'stats' or 'forts'.")
+             return
+
+        # Common name fetching logic for both views
+        player_name = f"ID: {pid}"
+        conn = db_manager.get_connection()
+        cursor = conn.cursor()
+        try:
+            # Try finding name in kingdom_players first, then try kvk_stats/snapshots if needed
+            cursor.execute("SELECT player_name FROM kingdom_players WHERE player_id = ?", (pid,))
+            row = cursor.fetchone()
+            if row:
+                player_name = row[0]
+            else:
+                # Fallback to checking any stats table
+                cursor.execute("SELECT player_name FROM kvk_stats WHERE player_id = ? LIMIT 1", (pid,))
+                row = cursor.fetchone()
+                if row: 
+                    player_name = row[0]
+            
+            # Create a virtual "accounts" list for the view
+            # This makes the view work as if this admin is the owner of this account
+            virtual_accounts = [{
+                'player_id': pid,
+                'player_name': player_name,
+                'account_type': 'Target' 
+            }]
+            
+        except Exception as e:
+            logger.error(f"Error fetching player name: {e}")
+            virtual_accounts = [{'player_id': pid, 'player_name': f"ID: {pid}", 'account_type': 'Target'}]
+        finally:
+            conn.close()
+        
+        if type.lower() == "stats":
             stats_cog = self.bot.get_cog("Stats")
             if not stats_cog:
                 await interaction.followup.send("❌ Stats module not loaded.")
                 return
             
+            # Create interactive view
+            view = UnifiedStatsView(virtual_accounts, target_kvk, "all", pid, stats_cog)
+            
             embed, file = await stats_cog.get_player_stats_embed_and_file(pid, target_kvk, "all")
+            
             if file:
-                await interaction.followup.send(embed=embed, file=file)
+                await interaction.followup.send(embed=embed, file=file, view=view)
             else:
-                await interaction.followup.send(embed=embed)
+                await interaction.followup.send(embed=embed, view=view)
                 
         elif type.lower() == "forts":
             forts_cog = self.bot.get_cog("Forts")
@@ -790,33 +835,15 @@ class Admin(commands.Cog):
                 await interaction.followup.send("❌ Forts module not loaded.")
                 return
             
-            # Need player name for fort view title usually, but let's try to fetch it
-            # get_my_forts_embed_and_file takes player_name kwarg
-            # We can try to fetch name from players table
-            conn = db_manager.get_connection()
-            cursor = conn.cursor()
-            try:
-                # Try finding name in kingdom_players first, then try kvk_stats/snapshots if needed
-                cursor.execute("SELECT player_name FROM kingdom_players WHERE player_id = ?", (pid,))
-                row = cursor.fetchone()
-                if row:
-                    player_name = row[0]
-                else:
-                    # Fallback to checking any stats table
-                    cursor.execute("SELECT player_name FROM kvk_stats WHERE player_id = ? LIMIT 1", (pid,))
-                    row = cursor.fetchone()
-                    if row: 
-                        player_name = row[0]
-            except Exception as e:
-                logger.error(f"Error fetching player name: {e}")
-            finally:
-                conn.close()
+            # Create interactive view
+            # FortStatsView(player_id, player_name, current_season, current_period, fort_cog, accounts=None)
+            view = FortStatsView(pid, player_name, target_kvk, "total", forts_cog, accounts=virtual_accounts)
             
             embed, file = await forts_cog.get_my_forts_embed_and_file(pid, player_name, target_kvk, "total")
             if file:
-                await interaction.followup.send(embed=embed, file=file)
+                await interaction.followup.send(embed=embed, file=file, view=view)
             else:
-                await interaction.followup.send(embed=embed)
+                await interaction.followup.send(embed=embed, view=view)
                 
         else:
              await interaction.followup.send("❌ Invalid type. Use 'stats' or 'forts'.")
