@@ -137,10 +137,9 @@ class Forts(commands.Cog):
         embed.add_field(name="Completed", value=str(aggregated['launched']), inline=True)
         embed.add_field(name="Total", value=f"**{aggregated['total']}**", inline=True)
         
-        # No Status logic requested for combined view
         
-        if aggregated['penalties'] > 0:
-             embed.add_field(name="⚠️ Total Penalties", value=f"{aggregated['penalties']} points", inline=False)
+        # No Status logic requested for combined view
+        # No Penalties logic requested for combined view
              
         # Add Last Updated footer
         last_updated = db_manager.get_fort_last_updated(season, period)
