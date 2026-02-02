@@ -795,11 +795,22 @@ class Admin(commands.Cog):
             # We can try to fetch name from players table
             conn = db_manager.get_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT name FROM players WHERE player_id = ?", (pid,))
-            row = cursor.fetchone()
-            if row:
-                player_name = row[0]
-            conn.close()
+            try:
+                # Try finding name in kingdom_players first, then try kvk_stats/snapshots if needed
+                cursor.execute("SELECT player_name FROM kingdom_players WHERE player_id = ?", (pid,))
+                row = cursor.fetchone()
+                if row:
+                    player_name = row[0]
+                else:
+                    # Fallback to checking any stats table
+                    cursor.execute("SELECT player_name FROM kvk_stats WHERE player_id = ? LIMIT 1", (pid,))
+                    row = cursor.fetchone()
+                    if row: 
+                        player_name = row[0]
+            except Exception as e:
+                logger.error(f"Error fetching player name: {e}")
+            finally:
+                conn.close()
             
             embed, file = await forts_cog.get_my_forts_embed_and_file(pid, player_name, target_kvk, "total")
             if file:
