@@ -294,12 +294,18 @@ class LeaderboardPaginationView(discord.ui.View):
         self.per_page = 10
         self.current_page = 0
         self.total_pages = (len(data) - 1) // self.per_page + 1
+        
+        # Load player types
+        self.player_types = db_manager.get_all_player_types()
 
     def create_embed(self):
         start = self.current_page * self.per_page
         end = start + self.per_page
         page_data = self.data[start:end]
         embed = discord.Embed(title=f"{self.title} - {self.kvk_name}", description="**Formula:** T4×4 + T5×10 + Deaths×15", color=discord.Color.gold())
+        
+        type_icons = {"main": "👤", "farm": "🌾", "alt": "🎭"}
+        
         leaderboard_text = ""
         for i, player in enumerate(page_data, start + 1):
             medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"**{i}.**"
@@ -310,11 +316,16 @@ class LeaderboardPaginationView(discord.ui.View):
                 return str(n)
             player_name = player['player_name']
             if len(player_name) > 20: player_name = player_name[:17] + "..."
-            leaderboard_text += f"{medal} **{player_name}**\n   🏆 **{fmt(player['dkp'])} DKP** | ⚡ {fmt_short(player.get('power', 0))}\n   ⚔️ T4: {fmt_short(player['t4'])} | T5: {fmt_short(player['t5'])} | 💀 {fmt_short(player['deaths'])}\n"
+            
+            # Get account type
+            acc_type = self.player_types.get(player['player_id'], 'main')
+            type_icon = type_icons.get(acc_type, "👤")
+            
+            leaderboard_text += f"{medal} **{player_name}** {type_icon}\n   🏆 **{fmt(player['dkp'])} DKP** | ⚡ {fmt_short(player.get('power', 0))}\n   ⚔️ T4: {fmt_short(player['t4'])} | T5: {fmt_short(player['t5'])} | 💀 {fmt_short(player['deaths'])}\n"
             if i < start + len(page_data): leaderboard_text += "\n"
         if not leaderboard_text: leaderboard_text = "No data available"
         embed.add_field(name=f"Leaderboard (Page {self.current_page + 1}/{self.total_pages})", value=leaderboard_text, inline=False)
-        embed.set_footer(text=f"Total players: {len(self.data)}")
+        embed.set_footer(text=f"Total players: {len(self.data)} | 👤 Main  🌾 Farm  🎭 Alt")
         return embed
 
     def update_buttons(self):

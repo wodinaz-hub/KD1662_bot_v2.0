@@ -54,6 +54,8 @@ class FortLeaderboardPaginationView(discord.ui.View):
             color=discord.Color.gold()
         )
 
+        type_icons = {"main": "👤", "farm": "🌾", "alt": "🎭"}
+        
         leaderboard_text = ""
         for i, player in enumerate(page_data, start + 1):
             medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"**{i}.**"
@@ -61,8 +63,12 @@ class FortLeaderboardPaginationView(discord.ui.View):
             player_name = player.get('player_name', 'Unknown')
             if len(player_name) > 20:
                 player_name = player_name[:17] + "..."
+            
+            # Get account type
+            acc_type = self.player_types.get(player['player_id'], 'main')
+            type_icon = type_icons.get(acc_type, "👤")
 
-            leaderboard_text += f"{medal} **{player_name}**\n"
+            leaderboard_text += f"{medal} **{player_name}** {type_icon}\n"
             leaderboard_text += f"   🏰 Total: **{player['total_forts']}**\n"
             leaderboard_text += f"   ⚔️ Joined: {player['forts_joined']} | ✅ Completed: {player['forts_launched']}\n"
             
