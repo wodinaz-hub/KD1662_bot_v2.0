@@ -461,9 +461,11 @@ class PlayerListPaginationView(discord.ui.View):
             # Get account type
             acc_type = self.player_types.get(p['player_id'], 'main')
             type_icon = type_icons.get(acc_type, "👤")
+            type_label = acc_type.capitalize()
             
-            text += f"{i}. **{p['player_name']}** (`{p['player_id']}`) {type_icon}\n"
-            text += f"   ⚡ {p['power']:,} | ⚔️ {kp:,} | 💀 {deaths:,} | *{kvk}*\n"
+            text += f"{i}. **{p['player_name']}** (`{p['player_id']}`)\n"
+            text += f"   ⚡ {p['power']:,} | ⚔️ {kp:,} | 💀 {deaths:,}\n"
+            text += f"   {type_icon} **{type_label}** | *{kvk}*\n"
             
         if not text:
             text = "No players found."
