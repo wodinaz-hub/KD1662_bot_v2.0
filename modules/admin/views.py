@@ -446,7 +446,6 @@ class PlayerListPaginationView(discord.ui.View):
         
         embed = discord.Embed(
             title=f"{self.title}",
-            description="**Format:** Name | Power | KP | Deaths | Type",
             color=discord.Color.blue()
         )
         
@@ -454,18 +453,15 @@ class PlayerListPaginationView(discord.ui.View):
         
         text = ""
         for i, p in enumerate(page_data, start + 1):
-            kp = p.get('kill_points', 0)
-            deaths = p.get('deaths', 0)
-            kvk = p.get('kvk_name', 'Unknown')
-            
             # Get account type
             acc_type = self.player_types.get(p['player_id'], 'main')
             type_icon = type_icons.get(acc_type, "👤")
             type_label = acc_type.capitalize()
             
+            power_fmt = f"{p['power']/1_000_000:.1f}M" if p['power'] >= 1_000_000 else f"{p['power']:,}"
+            
             text += f"{i}. **{p['player_name']}** (`{p['player_id']}`)\n"
-            text += f"   ⚡ {p['power']:,} | ⚔️ {kp:,} | 💀 {deaths:,}\n"
-            text += f"   {type_icon} **{type_label}** | *{kvk}*\n"
+            text += f"   ⚡ {power_fmt} | {type_icon} **{type_label}**\n"
             
         if not text:
             text = "No players found."
