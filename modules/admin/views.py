@@ -288,21 +288,42 @@ class WizardKvKSelectView(discord.ui.View):
 class LeaderboardPaginationView(discord.ui.View):
     def __init__(self, data, title, kvk_name):
         super().__init__(timeout=180)
-        self.data = data
+        self.all_data = data
         self.title = title
         self.kvk_name = kvk_name
-        self.per_page = 10
+        self.per_page = 8
         self.current_page = 0
-        self.total_pages = (len(data) - 1) // self.per_page + 1
+        self.selected_type = "all"
         
         # Load player types
         self.player_types = db_manager.get_all_player_types()
+        self._apply_filter()
+        self.update_components()
+
+    def _apply_filter(self):
+        if self.selected_type == "all":
+            self.data = self.all_data
+        else:
+            self.data = [
+                p for p in self.all_data
+                if self.player_types.get(p['player_id'], 'main') == self.selected_type
+            ]
+        self.total_pages = max(1, (len(self.data) - 1) // self.per_page + 1)
+        self.current_page = min(self.current_page, self.total_pages - 1)
 
     def create_embed(self):
         start = self.current_page * self.per_page
         end = start + self.per_page
         page_data = self.data[start:end]
-        embed = discord.Embed(title=f"{self.title} - {self.kvk_name}", description="**Formula:** T4×4 + T5×10 + Deaths×15", color=discord.Color.gold())
+        
+        type_labels = {"all": "All", "main": "Main", "farm": "Farm", "alt": "Alt"}
+        type_label = type_labels.get(self.selected_type, "All")
+        
+        embed = discord.Embed(
+            title=f"{self.title} - {self.kvk_name}",
+            description=f"**Formula:** T4×4 + T5×10 + Deaths×15 | Filter: **{type_label}**",
+            color=discord.Color.gold()
+        )
         
         type_icons = {"main": "👤", "farm": "🌾", "alt": "🎭"}
         
@@ -317,31 +338,55 @@ class LeaderboardPaginationView(discord.ui.View):
             player_name = player['player_name']
             if len(player_name) > 20: player_name = player_name[:17] + "..."
             
-            # Get account type
             acc_type = self.player_types.get(player['player_id'], 'main')
             type_icon = type_icons.get(acc_type, "👤")
             
-            leaderboard_text += f"{medal} **{player_name}** {type_icon}\n   🏆 **{fmt(player['dkp'])} DKP** | ⚡ {fmt_short(player.get('power', 0))}\n   ⚔️ T4: {fmt_short(player['t4'])} | T5: {fmt_short(player['t5'])} | 💀 {fmt_short(player['deaths'])}\n"
+            leaderboard_text += f"{medal} **{player_name}** {type_icon}\n"
+            leaderboard_text += f"   🏆 **{fmt(player['dkp'])} DKP** | ⚡ {fmt_short(player.get('power', 0))}\n"
+            leaderboard_text += f"   ⚔️ T4: {fmt_short(player['t4'])} | T5: {fmt_short(player['t5'])} | 💀 {fmt_short(player['deaths'])}\n"
             if i < start + len(page_data): leaderboard_text += "\n"
-        if not leaderboard_text: leaderboard_text = "No data available"
+            
+        if not leaderboard_text: leaderboard_text = "No data available for this filter"
         embed.add_field(name=f"Leaderboard (Page {self.current_page + 1}/{self.total_pages})", value=leaderboard_text, inline=False)
-        embed.set_footer(text=f"Total players: {len(self.data)} | 👤 Main  🌾 Farm  🎭 Alt")
+        embed.set_footer(text=f"Total players: {len(self.data)}")
         return embed
 
-    def update_buttons(self):
-        self.children[0].disabled = self.current_page == 0
-        self.children[1].disabled = self.current_page == self.total_pages - 1
+    def update_components(self):
+        self.clear_items()
+        
+        # Row 0: Filter buttons
+        for type_key, label, emoji in [("all", "All", "📊"), ("main", "Main", "👤"), ("farm", "Farm", "🌾"), ("alt", "Alt", "🎭")]:
+            style = discord.ButtonStyle.primary if self.selected_type == type_key else discord.ButtonStyle.secondary
+            btn = discord.ui.Button(label=label, style=style, emoji=emoji, row=0, custom_id=f"type_{type_key}")
+            btn.callback = self._create_type_callback(type_key)
+            self.add_item(btn)
+        
+        # Row 1: Navigation
+        prev_btn = discord.ui.Button(label="Previous", style=discord.ButtonStyle.primary, row=1, disabled=(self.current_page == 0))
+        prev_btn.callback = self._prev_callback
+        self.add_item(prev_btn)
+        
+        next_btn = discord.ui.Button(label="Next", style=discord.ButtonStyle.primary, row=1, disabled=(self.current_page >= self.total_pages - 1))
+        next_btn.callback = self._next_callback
+        self.add_item(next_btn)
 
-    @discord.ui.button(label="Previous", style=discord.ButtonStyle.primary, disabled=True)
-    async def previous_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    def _create_type_callback(self, type_key):
+        async def callback(interaction: discord.Interaction):
+            self.selected_type = type_key
+            self.current_page = 0
+            self._apply_filter()
+            self.update_components()
+            await interaction.response.edit_message(embed=self.create_embed(), view=self)
+        return callback
+
+    async def _prev_callback(self, interaction: discord.Interaction):
         self.current_page -= 1
-        self.update_buttons()
+        self.update_components()
         await interaction.response.edit_message(embed=self.create_embed(), view=self)
 
-    @discord.ui.button(label="Next", style=discord.ButtonStyle.primary)
-    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def _next_callback(self, interaction: discord.Interaction):
         self.current_page += 1
-        self.update_buttons()
+        self.update_components()
         await interaction.response.edit_message(embed=self.create_embed(), view=self)
 
 class LinkedAccountsPaginationView(discord.ui.View):
@@ -441,22 +486,39 @@ class CompliancePaginationView(discord.ui.View):
 class PlayerListPaginationView(discord.ui.View):
     def __init__(self, data, title):
         super().__init__(timeout=300)
-        self.data = data
+        self.all_data = data
         self.title = title
-        self.per_page = 6
+        self.per_page = 8
         self.current_page = 0
-        self.total_pages = (len(data) - 1) // self.per_page + 1
+        self.selected_type = "all"
         
         # Load player types once for efficiency
         self.player_types = db_manager.get_all_player_types()
+        self._apply_filter()
+        self.update_components()
+
+    def _apply_filter(self):
+        if self.selected_type == "all":
+            self.data = self.all_data
+        else:
+            self.data = [
+                p for p in self.all_data
+                if self.player_types.get(p['player_id'], 'main') == self.selected_type
+            ]
+        self.total_pages = max(1, (len(self.data) - 1) // self.per_page + 1)
+        self.current_page = min(self.current_page, self.total_pages - 1)
 
     def create_embed(self):
         start = self.current_page * self.per_page
         end = start + self.per_page
         page_data = self.data[start:end]
         
+        type_labels = {"all": "All", "main": "Main", "farm": "Farm", "alt": "Alt"}
+        type_label = type_labels.get(self.selected_type, "All")
+        
         embed = discord.Embed(
             title=f"{self.title}",
+            description=f"Filter: **{type_label}**",
             color=discord.Color.blue()
         )
         
@@ -464,38 +526,58 @@ class PlayerListPaginationView(discord.ui.View):
         
         text = ""
         for i, p in enumerate(page_data, start + 1):
-            # Get account type
             acc_type = self.player_types.get(p['player_id'], 'main')
             type_icon = type_icons.get(acc_type, "👤")
-            type_label = acc_type.capitalize()
+            type_label_item = acc_type.capitalize()
             
             power_fmt = f"{p['power']/1_000_000:.1f}M" if p['power'] >= 1_000_000 else f"{p['power']:,}"
             
             text += f"{i}. **{p['player_name']}** (`{p['player_id']}`)\n"
-            text += f"   ⚡ {power_fmt} | {type_icon} **{type_label}**\n"
+            text += f"   ⚡ {power_fmt} | {type_icon} **{type_label_item}**\n"
             
         if not text:
-            text = "No players found."
+            text = "No players found for this filter."
             
         embed.add_field(name=f"Players (Page {self.current_page + 1}/{self.total_pages})", value=text, inline=False)
-        embed.set_footer(text=f"Total: {len(self.data)} players | 👤 Main  🌾 Farm  🎭 Alt")
+        embed.set_footer(text=f"Total: {len(self.data)} players")
         return embed
 
-    def update_buttons(self):
-        if len(self.children) >= 2:
-            self.children[0].disabled = self.current_page == 0
-            self.children[1].disabled = self.current_page == self.total_pages - 1
+    def update_components(self):
+        self.clear_items()
+        
+        # Row 0: Filter buttons
+        for type_key, label, emoji in [("all", "All", "📊"), ("main", "Main", "👤"), ("farm", "Farm", "🌾"), ("alt", "Alt", "🎭")]:
+            style = discord.ButtonStyle.primary if self.selected_type == type_key else discord.ButtonStyle.secondary
+            btn = discord.ui.Button(label=label, style=style, emoji=emoji, row=0, custom_id=f"type_{type_key}")
+            btn.callback = self._create_type_callback(type_key)
+            self.add_item(btn)
+        
+        # Row 1: Navigation
+        prev_btn = discord.ui.Button(label="Previous", style=discord.ButtonStyle.primary, row=1, disabled=(self.current_page == 0))
+        prev_btn.callback = self._prev_callback
+        self.add_item(prev_btn)
+        
+        next_btn = discord.ui.Button(label="Next", style=discord.ButtonStyle.primary, row=1, disabled=(self.current_page >= self.total_pages - 1))
+        next_btn.callback = self._next_callback
+        self.add_item(next_btn)
 
-    @discord.ui.button(label="Previous", style=discord.ButtonStyle.primary, disabled=True)
-    async def previous_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    def _create_type_callback(self, type_key):
+        async def callback(interaction: discord.Interaction):
+            self.selected_type = type_key
+            self.current_page = 0
+            self._apply_filter()
+            self.update_components()
+            await interaction.response.edit_message(embed=self.create_embed(), view=self)
+        return callback
+
+    async def _prev_callback(self, interaction: discord.Interaction):
         self.current_page -= 1
-        self.update_buttons()
+        self.update_components()
         await interaction.response.edit_message(embed=self.create_embed(), view=self)
 
-    @discord.ui.button(label="Next", style=discord.ButtonStyle.primary)
-    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def _next_callback(self, interaction: discord.Interaction):
         self.current_page += 1
-        self.update_buttons()
+        self.update_components()
         await interaction.response.edit_message(embed=self.create_embed(), view=self)
 
 class AdminPanelView(discord.ui.View):
