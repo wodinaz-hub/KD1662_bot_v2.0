@@ -589,7 +589,6 @@ class Admin(commands.Cog):
             player_dkp.append({'player_id': s['player_id'], 'player_name': s['player_name'], 'power': s.get('total_power',0), 't4': t4, 't5': t5, 'deaths': d, 'dkp': dkp})
         player_dkp.sort(key=lambda x: x['dkp'], reverse=True)
         view = LeaderboardPaginationView(player_dkp, f"🏆 DKP Leaderboard (T4x{t4_w} T5x{t5_w} Dx{death_w})", target)
-        view.update_buttons()
         await interaction.followup.send(embed=view.create_embed(), view=view)
 
     @dkp_leaderboard.autocomplete('season')
@@ -731,7 +730,6 @@ class Admin(commands.Cog):
         players.sort(key=lambda x: x.get('power', 0), reverse=True)
         
         view = PlayerListPaginationView(players, "🌍 Global Player List")
-        view.update_buttons()
         await interaction.followup.send(embed=view.create_embed(), view=view)
 
     @app_commands.command(name="delete_snapshot", description="⚠️ Delete a specific snapshot batch.")
