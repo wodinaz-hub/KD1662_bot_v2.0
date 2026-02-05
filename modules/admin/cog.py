@@ -450,6 +450,30 @@ class Admin(commands.Cog):
         else:
             await interaction.response.send_message("❌ Not found or failed.")
 
+    @app_commands.command(name="set_player_type", description="Set account type (main/farm/alt) for any player ID.")
+    @app_commands.describe(player_id="The game ID", account_type="Type: main, farm, or alt")
+    @app_commands.default_permissions(administrator=True)
+    async def set_player_type(self, interaction: discord.Interaction, player_id: int, account_type: str):
+        if not self.is_admin(interaction):
+            await interaction.response.send_message("❌ You do not have permissions.", ephemeral=False)
+            return
+        
+        account_type = account_type.lower().strip()
+        if account_type not in ['main', 'farm', 'alt']:
+            await interaction.response.send_message("❌ Type must be 'main', 'farm', or 'alt'.", ephemeral=False)
+            return
+        
+        if db_manager.set_player_type(player_id, account_type):
+            await interaction.response.send_message(f"✅ Player `{player_id}` is now marked as **{account_type}**.", ephemeral=False)
+            await self.log_to_channel(interaction, "Set Player Type", f"Player: {player_id}, Type: {account_type}")
+        else:
+            await interaction.response.send_message("❌ Failed to set player type.", ephemeral=False)
+
+    @set_player_type.autocomplete('account_type')
+    async def set_player_type_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        options = ["main", "farm", "alt"]
+        return [app_commands.Choice(name=o.capitalize(), value=o) for o in options if current.lower() in o]
+
     @app_commands.command(name="export_leaderboard", description="Export DKP leaderboard as CSV.")
     @app_commands.default_permissions(administrator=True)
     async def export_leaderboard(self, interaction: discord.Interaction):

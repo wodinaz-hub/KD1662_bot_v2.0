@@ -198,6 +198,14 @@ def create_tables():
                 )
             ''')
 
+            # Table for player types (for unlinked accounts or manual overrides)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS player_types (
+                    player_id INTEGER PRIMARY KEY,
+                    account_type TEXT NOT NULL DEFAULT 'main'
+                )
+            ''')
+
             # Table for global settings
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS global_settings (

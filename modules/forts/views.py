@@ -4,44 +4,53 @@ from database import database_manager as db_manager
 class FortLeaderboardPaginationView(discord.ui.View):
     def __init__(self, data, title, kvk_name, period_key="total"):
         super().__init__(timeout=600)
-        self.data = data
+        self.all_data = data  # Store original unfiltered data
         self.title = title
         self.kvk_name = kvk_name
         self.period_key = period_key
         self.per_page = 10
         self.current_page = 0
-        self.total_pages = (len(data) - 1) // self.per_page + 1
-        self.max_pages = 25 # Discord select menu limit safety if we add dropdowns later
+        self.selected_type = "all"  # 'all', 'main', 'farm', 'alt'
+        self.max_pages = 25
         
         # Get last updated time
         self.last_updated = db_manager.get_fort_last_updated(kvk_name, period_key)
         
-        self.update_buttons()
+        # Load player types once
+        self.player_types = db_manager.get_all_player_types()
+        
+        # Apply initial filter
+        self._apply_filter()
+        self.update_components()
+
+    def _apply_filter(self):
+        """Filters data based on selected account type."""
+        if self.selected_type == "all":
+            self.data = self.all_data
+        else:
+            self.data = [
+                p for p in self.all_data
+                if self.player_types.get(p['player_id'], 'main') == self.selected_type
+            ]
+        self.total_pages = max(1, (len(self.data) - 1) // self.per_page + 1)
+        self.current_page = min(self.current_page, self.total_pages - 1)
 
     async def on_timeout(self):
         """Disable buttons on timeout."""
         for child in self.children:
             child.disabled = True
-        try:
-            # Note: We can only edit if we have the message object, 
-            # which is easier if we store it or reply to interaction.
-            # But normally Views are attached to a message.
-            # To edit the message properly on timeout, we need 'self.message' which is set if we use 'interaction.message'
-            # inside callbacks, but here we might not have it stored easily unless we assign it.
-            # Best practice: Assign self.message in the command that sends it 
-            # or in the first interaction.
-            pass 
-        except Exception:
-            pass
 
     def create_embed(self):
         start = self.current_page * self.per_page
         end = start + self.per_page
         page_data = self.data[start:end]
 
+        type_labels = {"all": "All", "main": "Main", "farm": "Farm", "alt": "Alt"}
+        type_label = type_labels.get(self.selected_type, "All")
+
         embed = discord.Embed(
             title=f"{self.title}",
-            description=f"Season: **{self.kvk_name}**",
+            description=f"Season: **{self.kvk_name}** | Filter: **{type_label}**",
             color=discord.Color.gold()
         )
 
@@ -61,14 +70,14 @@ class FortLeaderboardPaginationView(discord.ui.View):
                 leaderboard_text += "\n"
 
         if not leaderboard_text:
-            leaderboard_text = "No data available"
+            leaderboard_text = "No data available for this filter"
 
         embed.add_field(name=f"Leaderboard (Page {self.current_page + 1}/{self.total_pages})", value=leaderboard_text, inline=False)
         
         footer_text = f"Total players: {len(self.data)}"
         if self.last_updated:
-            # Format timestamp nicely (it's stored as ISO usually)
             try:
+                from datetime import datetime
                 dt = discord.utils.parse_time(self.last_updated) or datetime.fromisoformat(self.last_updated)
                 footer_text += f" | Last Updated: {dt.strftime('%d/%m/%Y %H:%M')}"
             except:
@@ -77,21 +86,42 @@ class FortLeaderboardPaginationView(discord.ui.View):
         embed.set_footer(text=footer_text)
         return embed
 
-    def update_buttons(self):
-        if len(self.children) >= 2:
-            self.children[0].disabled = self.current_page == 0
-            self.children[1].disabled = self.current_page == self.total_pages - 1
+    def update_components(self):
+        self.clear_items()
+        
+        # Row 0: Account Type Filter Buttons
+        for type_key, label, emoji in [("all", "All", "📊"), ("main", "Main", "👤"), ("farm", "Farm", "🌾"), ("alt", "Alt", "🎭")]:
+            style = discord.ButtonStyle.primary if self.selected_type == type_key else discord.ButtonStyle.secondary
+            btn = discord.ui.Button(label=label, style=style, emoji=emoji, row=0, custom_id=f"type_{type_key}")
+            btn.callback = self._create_type_callback(type_key)
+            self.add_item(btn)
+        
+        # Row 1: Navigation
+        prev_btn = discord.ui.Button(label="Previous", style=discord.ButtonStyle.primary, row=1, disabled=(self.current_page == 0))
+        prev_btn.callback = self._prev_callback
+        self.add_item(prev_btn)
+        
+        next_btn = discord.ui.Button(label="Next", style=discord.ButtonStyle.primary, row=1, disabled=(self.current_page == self.total_pages - 1))
+        next_btn.callback = self._next_callback
+        self.add_item(next_btn)
 
-    @discord.ui.button(label="Previous", style=discord.ButtonStyle.primary, disabled=True)
-    async def previous_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    def _create_type_callback(self, type_key):
+        async def callback(interaction: discord.Interaction):
+            self.selected_type = type_key
+            self.current_page = 0
+            self._apply_filter()
+            self.update_components()
+            await interaction.response.edit_message(embed=self.create_embed(), view=self)
+        return callback
+
+    async def _prev_callback(self, interaction: discord.Interaction):
         self.current_page -= 1
-        self.update_buttons()
+        self.update_components()
         await interaction.response.edit_message(embed=self.create_embed(), view=self)
 
-    @discord.ui.button(label="Next", style=discord.ButtonStyle.primary)
-    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def _next_callback(self, interaction: discord.Interaction):
         self.current_page += 1
-        self.update_buttons()
+        self.update_components()
         await interaction.response.edit_message(embed=self.create_embed(), view=self)
 
 

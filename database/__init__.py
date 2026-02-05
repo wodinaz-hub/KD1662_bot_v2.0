@@ -63,7 +63,10 @@ from .players import (
     get_all_linked_accounts_full,
     unlink_account,
     add_new_player,
-    get_all_players_global
+    get_all_players_global,
+    set_player_type,
+    get_player_type,
+    get_all_player_types
 )
 from .admin import (
     log_admin_action,

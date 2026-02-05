@@ -246,3 +246,65 @@ def get_all_players_global():
     except Exception as e:
         logger.error(f"Error getting global player list: {e}")
         return []
+
+def set_player_type(player_id: int, account_type: str):
+    """Sets or updates the account type for an unlinked player."""
+    try:
+        with closing(get_connection()) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO player_types (player_id, account_type)
+                VALUES (?, ?)
+            ''', (player_id, account_type.lower()))
+            conn.commit()
+        return True
+    except Exception as e:
+        logger.error(f"Error setting player type: {e}")
+        return False
+
+def get_player_type(player_id: int):
+    """
+    Returns the account type for a player.
+    Priority: player_types table > linked_accounts table > 'main' default.
+    """
+    try:
+        with closing(get_connection()) as conn:
+            cursor = conn.cursor()
+            # Check player_types first (manual override)
+            cursor.execute("SELECT account_type FROM player_types WHERE player_id = ?", (player_id,))
+            row = cursor.fetchone()
+            if row:
+                return row[0]
+            
+            # Check linked_accounts
+            cursor.execute("SELECT account_type FROM linked_accounts WHERE player_id = ?", (player_id,))
+            row = cursor.fetchone()
+            if row:
+                return row[0]
+            
+            return 'main'  # Default
+    except Exception as e:
+        logger.error(f"Error getting player type: {e}")
+        return 'main'
+
+def get_all_player_types():
+    """Returns a dict mapping player_id to account_type for all known players (from linked_accounts and player_types)."""
+    try:
+        with closing(get_connection()) as conn:
+            cursor = conn.cursor()
+            result = {}
+            
+            # Get from linked_accounts
+            cursor.execute("SELECT player_id, account_type FROM linked_accounts")
+            for row in cursor.fetchall():
+                result[row[0]] = row[1]
+            
+            # Override with player_types (manual settings take priority)
+            cursor.execute("SELECT player_id, account_type FROM player_types")
+            for row in cursor.fetchall():
+                result[row[0]] = row[1]
+            
+            return result
+    except Exception as e:
+        logger.error(f"Error getting all player types: {e}")
+        return {}
