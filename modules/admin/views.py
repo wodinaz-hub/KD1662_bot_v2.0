@@ -435,6 +435,9 @@ class PlayerListPaginationView(discord.ui.View):
         self.per_page = 6
         self.current_page = 0
         self.total_pages = (len(data) - 1) // self.per_page + 1
+        
+        # Load player types once for efficiency
+        self.player_types = db_manager.get_all_player_types()
 
     def create_embed(self):
         start = self.current_page * self.per_page
@@ -443,23 +446,30 @@ class PlayerListPaginationView(discord.ui.View):
         
         embed = discord.Embed(
             title=f"{self.title}",
-            description="**Format:** ID | Name | Power | KP | Deaths | (Source)",
+            description="**Format:** Name | Power | KP | Deaths | Type",
             color=discord.Color.blue()
         )
+        
+        type_icons = {"main": "👤", "farm": "🌾", "alt": "🎭"}
         
         text = ""
         for i, p in enumerate(page_data, start + 1):
             kp = p.get('kill_points', 0)
             deaths = p.get('deaths', 0)
             kvk = p.get('kvk_name', 'Unknown')
-            text += f"{i}. **{p['player_name']}** (`{p['player_id']}`)\n"
+            
+            # Get account type
+            acc_type = self.player_types.get(p['player_id'], 'main')
+            type_icon = type_icons.get(acc_type, "👤")
+            
+            text += f"{i}. **{p['player_name']}** (`{p['player_id']}`) {type_icon}\n"
             text += f"   ⚡ {p['power']:,} | ⚔️ {kp:,} | 💀 {deaths:,} | *{kvk}*\n"
             
         if not text:
             text = "No players found."
             
         embed.add_field(name=f"Players (Page {self.current_page + 1}/{self.total_pages})", value=text, inline=False)
-        embed.set_footer(text=f"Total: {len(self.data)} players found across all seasons")
+        embed.set_footer(text=f"Total: {len(self.data)} players | 👤 Main  🌾 Farm  🎭 Alt")
         return embed
 
     def update_buttons(self):
