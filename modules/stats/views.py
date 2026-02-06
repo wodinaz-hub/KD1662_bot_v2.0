@@ -28,6 +28,19 @@ class LinkAccountModal(discord.ui.Modal, title="Link Account"):
             return
 
         discord_id = interaction.user.id
+        
+        # Check if user already has a main account linked
+        if self.account_type == 'main':
+            existing_accounts = db_manager.get_linked_accounts(discord_id)
+            has_main = any(acc['account_type'] == 'main' for acc in existing_accounts)
+            if has_main:
+                await interaction.response.send_message(
+                    "❌ You already have a main account linked. You can only link one main account.\n"
+                    "Use `/unlink_account` to remove your current main account first, or link this as Alt or Farm.",
+                    ephemeral=True
+                )
+                return
+        
         success = db_manager.link_account(discord_id, p_id, self.account_type)
 
         if success:

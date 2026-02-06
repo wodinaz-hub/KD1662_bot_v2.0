@@ -177,24 +177,16 @@ class Forts(commands.Cog):
             total = stats['total_forts']
             penalties = stats['penalties']
             
-            req_forts = 35
+            req_forts = 50
             
             embed.add_field(name="Joined", value=str(joined), inline=True)
             embed.add_field(name="Completed", value=str(launched), inline=True)
             embed.add_field(name="Total", value=f"**{total}**", inline=True)
             
-            if period == "total":
-                # For total, we check if there are any penalties (missed periods)
-                if penalties == 0:
-                    status = "✅ Perfect Season"
-                else:
-                    status = f"⚠️ Missed Requirements ({penalties} times)"
-                embed.add_field(name="Season Status", value=status, inline=False)
-            else:
-                # For specific period, check against 35
-                diff = total - req_forts
-                status = "✅ Met" if diff >= 0 else f"❌ Missing {abs(diff)}"
-                embed.add_field(name="Period Status", value=status, inline=False)
+            # Check period status (against 50 forts requirement)
+            diff = total - req_forts
+            status = "✅ Met" if diff >= 0 else f"❌ Missing {abs(diff)}"
+            embed.add_field(name="Period Status", value=status, inline=False)
             
             if penalties > 0:
                 embed.add_field(name="⚠️ Penalties", value=f"{penalties} points", inline=False)
@@ -423,7 +415,7 @@ class Forts(commands.Cog):
 
             # Save to DB
             stats_list = []
-            req_forts = 35
+            req_forts = 50
             
             for pid, data in stats_data.items():
                 total = data['joined'] + data['launched']
@@ -488,7 +480,7 @@ class Forts(commands.Cog):
 
         # Save to DB
         stats_list = []
-        req_forts = 35
+        req_forts = 50
         
         for pid, data in stats_data.items():
             total = data['joined'] + data['launched']
@@ -629,7 +621,7 @@ class Forts(commands.Cog):
 
         # Calculate totals and penalties
         stats_list = []
-        req_forts = 35
+        req_forts = 50
         
         for pid, data in total_stats.items():
             total = data['joined'] + data['launched']
