@@ -45,7 +45,7 @@ class Forts(commands.Cog):
     @app_commands.command(name='my_forts', description='Show your fort participation statistics.')
     @app_commands.describe(period="Select a specific period or 'Total'", season="Select a fort season (e.g. Forts_2024)")
     async def my_forts(self, interaction: discord.Interaction, period: str = "total", season: str = None):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
         
         # Get linked account
         accounts = db_manager.get_linked_accounts(interaction.user.id)
@@ -243,7 +243,7 @@ class Forts(commands.Cog):
     @app_commands.command(name='fort_leaderboard', description='Show fort participation rankings.')
     @app_commands.describe(period="Select a specific period or 'Total'", season="Select a fort season")
     async def fort_leaderboard(self, interaction: discord.Interaction, period: str = "total", season: str = None):
-        await interaction.response.defer(ephemeral=False)
+        await interaction.response.defer(ephemeral=True)
         
         if season is None and period == "total":
             latest_season, latest_period = db_manager.get_latest_fort_activity()
