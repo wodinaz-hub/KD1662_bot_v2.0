@@ -11,7 +11,8 @@ from .views import (
     AdminPanelView, KvKSelectView, FinishKvKConfirmView, 
     ResetBotConfirmView, ClearFortsConfirmView, WizardKvKSelectView,
     DeletePlayerConfirmView, DeleteKvKConfirmView, LeaderboardPaginationView,
-    LinkedAccountsPaginationView, CompliancePaginationView, PlayerListPaginationView
+    LinkedAccountsPaginationView, CompliancePaginationView, PlayerListPaginationView,
+    RestoreConfirmView, DeleteFortPeriodConfirmView
 )
 from modules.stats.views import UnifiedStatsView
 from modules.forts.views import FortStatsView
@@ -757,20 +758,73 @@ class Admin(commands.Cog):
             await interaction.response.send_message("❌ Failed to delete snapshot (or none found).", ephemeral=False)
 
     @app_commands.command(name="delete_fort_period", description="⚠️ Delete fort stats for a specific period.")
-    @app_commands.describe(period="Period key (e.g. week_1)", kvk="Optional KvK name")
+    @app_commands.describe(period="Select the period to delete", season="Select the fort season")
     @app_commands.default_permissions(administrator=True)
-    async def delete_fort_period(self, interaction: discord.Interaction, period: str, kvk: str = None):
+    async def delete_fort_period(self, interaction: discord.Interaction, season: str, period: str):
         if not self.is_admin(interaction):
             await interaction.response.send_message("❌ Permissions denied.", ephemeral=False)
             return
         
-        target_kvk = kvk or db_manager.get_current_kvk_name()
+        # Find the period label for display
+        periods = db_manager.get_fort_periods(season)
+        period_label = next((p['period_label'] for p in periods if p['period_key'] == period), period)
         
-        if db_manager.delete_fort_period(target_kvk, period):
-             await interaction.response.send_message(f"✅ Deleted fort data for **{period}** in **{target_kvk}**.", ephemeral=False)
-             await self.log_to_channel(interaction, "Delete Fort Period", f"KvK: {target_kvk}, Period: {period}")
-        else:
-             await interaction.response.send_message("❌ Failed to delete fort period (or none found).", ephemeral=False)
+        await interaction.response.send_message(
+            f"⚠️ **Are you sure you want to delete fort data?**\n\n"
+            f"Season: **{season}**\n"
+            f"Period: **{period_label}** (`{period}`)\n\n"
+            f"This action cannot be undone!",
+            view=DeleteFortPeriodConfirmView(season, period, period_label, self),
+            ephemeral=False
+        )
+
+    @delete_fort_period.autocomplete('season')
+    async def delete_fort_period_season_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        seasons = db_manager.get_fort_seasons()
+        return [app_commands.Choice(name=s, value=s) for s in seasons if current.lower() in s.lower()][:25]
+
+    @delete_fort_period.autocomplete('period')
+    async def delete_fort_period_period_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        season = interaction.namespace.season
+        if not season:
+            return []
+        periods = db_manager.get_fort_periods(season)
+        choices = []
+        for p in periods:
+            if current.lower() in p['period_label'].lower():
+                choices.append(app_commands.Choice(name=f"📅 {p['period_label']}", value=p['period_key']))
+        return choices[:25]
+
+    @commands.command(name='restore_db')
+    async def msg_restore_db(self, ctx: commands.Context):
+        """Restore the database from a backup file. Usage: !restore_db (attach .db file)"""
+        if not self.is_admin_ctx(ctx):
+            await ctx.send("❌ You do not have permissions to use this command.")
+            return
+
+        if not ctx.message.attachments:
+            await ctx.send("❌ Please attach a `.db` backup file to your message.\n"
+                           "💡 You can find daily backups sent by the bot in the log channel.")
+            return
+
+        attachment = ctx.message.attachments[0]
+        if not attachment.filename.endswith('.db'):
+            await ctx.send("❌ Please upload a `.db` file (SQLite database backup).")
+            return
+
+        # Save to temp location
+        if not os.path.exists("temp_uploads"):
+            os.makedirs("temp_uploads")
+        file_path = f"temp_uploads/{attachment.filename}"
+        await attachment.save(file_path)
+
+        await ctx.send(
+            f"⚠️ **DATABASE RESTORE** ⚠️\n\n"
+            f"You are about to replace the **entire database** with `{attachment.filename}`.\n"
+            f"A safety backup of the current database will be created automatically.\n\n"
+            f"**This will overwrite ALL current data!**",
+            view=RestoreConfirmView(file_path, self)
+        )
 
     @app_commands.command(name="check_player", description="Admin: View stats or forts for ANY player ID.")
     @app_commands.describe(player_id="Game ID to check", type="stats or forts", season="Optional Season")

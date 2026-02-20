@@ -41,6 +41,41 @@ def backup_database():
         logger.error(f"Error creating database backup: {e}")
         return None
 
+def restore_database(uploaded_path: str):
+    """
+    Restores the database from an uploaded backup file.
+    1. Creates a safety backup of the current DB
+    2. Replaces the active DB with the uploaded file
+    
+    Returns:
+        (success: bool, message: str, safety_backup_path: str or None)
+    """
+    import shutil
+    
+    try:
+        # Validate that uploaded file is a valid SQLite database
+        try:
+            test_conn = sqlite3.connect(uploaded_path)
+            test_conn.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")
+            test_conn.close()
+        except sqlite3.DatabaseError:
+            return False, "The uploaded file is not a valid SQLite database.", None
+        
+        # Create a safety backup before replacing
+        safety_backup_path = backup_database()
+        if not safety_backup_path:
+            return False, "Failed to create safety backup before restore. Aborting.", None
+        
+        # Replace the database file
+        shutil.copy2(uploaded_path, DATABASE_PATH)
+        
+        logger.info(f"Database restored from {uploaded_path}. Safety backup at {safety_backup_path}")
+        return True, "Database restored successfully!", safety_backup_path
+        
+    except Exception as e:
+        logger.error(f"Error restoring database: {e}")
+        return False, f"Error during restore: {e}", None
+
 def create_tables():
     """
     Creates database tables if they do not exist.

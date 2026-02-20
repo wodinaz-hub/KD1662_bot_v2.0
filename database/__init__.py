@@ -1,6 +1,7 @@
 from .base import (
     get_connection,
     backup_database,
+    restore_database,
     create_tables,
     DATABASE_PATH,
     DATA_DIR

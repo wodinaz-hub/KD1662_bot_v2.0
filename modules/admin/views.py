@@ -166,6 +166,87 @@ class ClearFortsConfirmView(discord.ui.View):
         await interaction.response.edit_message(content="Action cancelled.", view=None)
         self.stop()
 
+class RestoreConfirmView(discord.ui.View):
+    def __init__(self, file_path, admin_cog):
+        super().__init__(timeout=60)
+        self.file_path = file_path
+        self.admin_cog = admin_cog
+
+    @discord.ui.button(label="YES, RESTORE DATABASE", style=discord.ButtonStyle.red, emoji="⚠️")
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        
+        success, msg, safety_path = db_manager.restore_database(self.file_path)
+        
+        if success:
+            # Send safety backup file
+            if safety_path:
+                try:
+                    file = discord.File(safety_path, filename="pre_restore_backup.db")
+                    await interaction.followup.send(
+                        f"✅ **{msg}**\n📦 Safety backup (pre-restore) is attached in case you need to undo.",
+                        file=file
+                    )
+                except Exception:
+                    await interaction.followup.send(f"✅ **{msg}**\nSafety backup saved locally at `{safety_path}`.")
+            else:
+                await interaction.followup.send(f"✅ **{msg}**")
+            
+            await self.admin_cog.log_to_channel(interaction, "Database Restored", f"Restored from uploaded backup. Safety backup: {safety_path}")
+            
+            # Reinitialize tables to handle potential schema differences
+            db_manager.create_tables()
+        else:
+            await interaction.followup.send(f"❌ **Restore failed:** {msg}")
+        
+        # Cleanup temp file
+        import os
+        try:
+            os.remove(self.file_path)
+        except Exception:
+            pass
+        
+        self.stop()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.grey)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="Restore cancelled.", view=None)
+        # Cleanup temp file
+        import os
+        try:
+            os.remove(self.file_path)
+        except Exception:
+            pass
+        self.stop()
+
+class DeleteFortPeriodConfirmView(discord.ui.View):
+    def __init__(self, kvk_name, period_key, period_label, admin_cog):
+        super().__init__(timeout=60)
+        self.kvk_name = kvk_name
+        self.period_key = period_key
+        self.period_label = period_label
+        self.admin_cog = admin_cog
+
+    @discord.ui.button(label="Yes, Delete Fort Period", style=discord.ButtonStyle.red, emoji="🗑️")
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if db_manager.delete_fort_period(self.kvk_name, self.period_key):
+            await interaction.response.edit_message(
+                content=f"✅ Deleted fort data for period **{self.period_label}** in season **{self.kvk_name}**.",
+                view=None
+            )
+            await self.admin_cog.log_to_channel(interaction, "Delete Fort Period", f"Season: {self.kvk_name}, Period: {self.period_label} ({self.period_key})")
+        else:
+            await interaction.response.edit_message(
+                content="❌ Failed to delete fort period (or none found).",
+                view=None
+            )
+        self.stop()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.grey)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="Deletion cancelled.", view=None)
+        self.stop()
+
 class WizardConfirmationView(discord.ui.View):
     def __init__(self, kvk_name, reqs_count, admin_cog):
         super().__init__(timeout=120)
