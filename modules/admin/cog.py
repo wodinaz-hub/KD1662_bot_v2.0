@@ -582,11 +582,11 @@ class Admin(commands.Cog):
     @app_commands.command(name="dkp_leaderboard", description="🏆 Show DKP leaderboard.")
     @app_commands.describe(season="Optional: Select a specific season")
     async def dkp_leaderboard(self, interaction: discord.Interaction, season: str = None):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         target = season or db_manager.get_current_kvk_name()
         all_stats = db_manager.get_all_kvk_stats(target)
         if not all_stats:
-            await interaction.followup.send("No stats.")
+            await interaction.followup.send("No stats.", ephemeral=True)
             return
         player_dkp = []
         formula = db_manager.get_dkp_formula()
@@ -598,7 +598,7 @@ class Admin(commands.Cog):
             player_dkp.append({'player_id': s['player_id'], 'player_name': s['player_name'], 'power': s.get('total_power',0), 't4': t4, 't5': t5, 'deaths': d, 'dkp': dkp})
         player_dkp.sort(key=lambda x: x['dkp'], reverse=True)
         view = LeaderboardPaginationView(player_dkp, f"🏆 DKP Leaderboard (T4x{t4_w} T5x{t5_w} Dx{death_w})", target)
-        await interaction.followup.send(embed=view.create_embed(), view=view)
+        await interaction.followup.send(embed=view.create_embed(), view=view, ephemeral=True)
 
     @dkp_leaderboard.autocomplete('season')
     async def season_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
