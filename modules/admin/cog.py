@@ -392,6 +392,14 @@ class Admin(commands.Cog):
         success, message = calculation.calculate_period_results(current_kvk, period_name)
         await interaction.followup.send(f"{'✅' if success else '❌'} {message}")
 
+    @calculate_period.autocomplete('period_name')
+    async def calculate_period_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        current_kvk = db_manager.get_current_kvk_name()
+        if not current_kvk or current_kvk == "Not set":
+            return []
+        periods = db_manager.get_all_periods(current_kvk)
+        return [app_commands.Choice(name=p['period_key'], value=p['period_key']) for p in periods if current.lower() in p['period_key'].lower()][:25]
+
     @app_commands.command(name="view_requirements", description="View current KvK requirements.")
     @app_commands.default_permissions(administrator=True)
     async def view_requirements(self, interaction: discord.Interaction):
@@ -660,12 +668,20 @@ class Admin(commands.Cog):
             await ctx.send("❌ You do not have permissions to use this command.")
             return
         if not ctx.message.attachments: return
+        
+        snapshot_type = snapshot_type.lower().strip()
+        if snapshot_type not in ['start', 'end']:
+            await ctx.send("❌ **Error:** `snapshot_type` must be either **start** or **end**.\n"
+                           "💡 *Note:* The command no longer requires `kvk_name`. "
+                           "Correct format: `!upload_snapshot <period_name> <start|end>`")
+            return
+            
         attachment = ctx.message.attachments[0]
         current_kvk = db_manager.get_current_kvk_name()
         file_path = f"temp_uploads/{attachment.filename}"
         if not os.path.exists("temp_uploads"): os.makedirs("temp_uploads")
         await attachment.save(file_path)
-        success, msg = db_manager.import_snapshot(file_path, current_kvk, period_name, snapshot_type.lower())
+        success, msg = db_manager.import_snapshot(file_path, current_kvk, period_name, snapshot_type)
         os.remove(file_path)
         await ctx.send(f"{'✅' if success else '❌'} {msg}")
 

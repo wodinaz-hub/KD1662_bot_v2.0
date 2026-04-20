@@ -175,7 +175,7 @@ def save_period_results(results: list):
             cursor.executemany('''
                 INSERT OR REPLACE INTO kvk_stats 
                 (player_id, player_name, power, kill_points, deaths, t1_kills, t2_kills, t3_kills, t4_kills, t5_kills, kvk_name, period_key)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (:player_id, :player_name, :power, :kill_points, :deaths, :t1_kills, :t2_kills, :t3_kills, :t4_kills, :t5_kills, :kvk_name, :period_key)
             ''', results)
             conn.commit()
         return True
