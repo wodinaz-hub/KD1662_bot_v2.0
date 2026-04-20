@@ -8,19 +8,33 @@ def calculate_period_results(kvk_name: str, period_key: str):
     Calculates the results for a specific period by comparing Start and End snapshots.
     Saves the results to the kvk_stats table.
     """
-    logger.info(f"Starting calculation for {kvk_name} - {period_key}")
+    # Normalize period_key to lowercase to match how snapshots are stored
+    period_key = period_key.strip().lower()
+
+    logger.info(f"Starting calculation for {kvk_name!r} - {period_key!r}")
     
     # 1. Fetch Start and End snapshots
+    logger.debug(f"Querying START snapshot: kvk_name={kvk_name!r}, period_key={period_key!r}")
     start_data = db_manager.get_snapshot_data(kvk_name, period_key, 'start')
+    logger.debug(f"START snapshot records found: {len(start_data)}")
+
+    logger.debug(f"Querying END snapshot: kvk_name={kvk_name!r}, period_key={period_key!r}")
     end_data = db_manager.get_snapshot_data(kvk_name, period_key, 'end')
+    logger.debug(f"END snapshot records found: {len(end_data)}")
     
     if not start_data:
-        logger.warning(f"No START snapshot found for {kvk_name} - {period_key}")
-        return False, "Start snapshot missing."
+        logger.warning(
+            f"No START snapshot found for kvk_name={kvk_name!r}, period_key={period_key!r}. "
+            f"Ensure the snapshot was uploaded with the same period name."
+        )
+        return False, f"Start snapshot missing for period '{period_key}'."
     
     if not end_data:
-        logger.warning(f"No END snapshot found for {kvk_name} - {period_key}")
-        return False, "End snapshot missing."
+        logger.warning(
+            f"No END snapshot found for kvk_name={kvk_name!r}, period_key={period_key!r}. "
+            f"Ensure the snapshot was uploaded with the same period name."
+        )
+        return False, f"End snapshot missing for period '{period_key}'."
         
     results = []
     
