@@ -9,6 +9,10 @@ logger = logging.getLogger('db_manager.kvk')
 def import_snapshot(file_path: str, kvk_name: str, period_key: str, snapshot_type: str):
     """Imports a snapshot (Start/End) from Excel into the kvk_snapshots table."""
     try:
+        # Normalize keys to lowercase to ensure consistent storage and retrieval
+        period_key = period_key.strip().lower()
+        snapshot_type = snapshot_type.strip().lower()
+
         df = pd.read_excel(file_path)
         df.columns = [c.strip().lower() for c in df.columns]
         
@@ -121,6 +125,14 @@ def import_requirements(file_path: str, kvk_name: str):
 def get_snapshot_data(kvk_name: str, period_key: str, snapshot_type: str):
     """Retrieves snapshot data as a dictionary {player_id: row}."""
     try:
+        # Normalize to lowercase so lookups are case-insensitive
+        period_key = period_key.strip().lower()
+        snapshot_type = snapshot_type.strip().lower()
+
+        logger.debug(
+            f"get_snapshot_data query: kvk_name={kvk_name!r}, "
+            f"period_key={period_key!r}, snapshot_type={snapshot_type!r}"
+        )
         with closing(get_connection()) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
@@ -128,14 +140,21 @@ def get_snapshot_data(kvk_name: str, period_key: str, snapshot_type: str):
                 SELECT * FROM kvk_snapshots 
                 WHERE kvk_name = ? AND period_key = ? AND snapshot_type = ?
             ''', (kvk_name, period_key, snapshot_type))
-            return {row['player_id']: dict(row) for row in cursor.fetchall()}
+            rows = cursor.fetchall()
+            logger.debug(f"get_snapshot_data returned {len(rows)} rows")
+            return {row['player_id']: dict(row) for row in rows}
     except Exception as e:
         logger.error(f"Error getting snapshot data: {e}")
         return {}
 
+
 def delete_snapshot(kvk_name: str, period_key: str, snapshot_type: str):
     """Deletes a specific snapshot batch."""
     try:
+        # Normalize to lowercase for consistent key matching
+        period_key = period_key.strip().lower()
+        snapshot_type = snapshot_type.strip().lower()
+
         with closing(get_connection()) as conn:
             cursor = conn.cursor()
             cursor.execute('''
