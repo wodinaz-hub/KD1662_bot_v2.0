@@ -151,13 +151,30 @@ def delete_snapshot(kvk_name: str, period_key: str, snapshot_type: str):
 def save_period_results(results: list):
     """Saves calculated period results."""
     try:
+        data_to_insert = [
+            (
+                r['player_id'],
+                r['player_name'],
+                r['power'],
+                r['kill_points'],
+                r['deaths'],
+                r['t1_kills'],
+                r['t2_kills'],
+                r['t3_kills'],
+                r['t4_kills'],
+                r['t5_kills'],
+                r['kvk_name'],
+                r['period_key'],
+            )
+            for r in results
+        ]
         with closing(get_connection()) as conn:
             cursor = conn.cursor()
             cursor.executemany('''
                 INSERT OR REPLACE INTO kvk_stats 
                 (player_id, player_name, power, kill_points, deaths, t1_kills, t2_kills, t3_kills, t4_kills, t5_kills, kvk_name, period_key)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', results)
+            ''', data_to_insert)
             conn.commit()
         return True
     except Exception as e:
