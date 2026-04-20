@@ -4,6 +4,7 @@ from discord import app_commands
 import os
 import logging
 from dotenv import load_dotenv
+from database import database_manager as db_manager
 
 # Load environment variables from .env file
 load_dotenv()
@@ -143,7 +144,7 @@ class MyBot(commands.Bot):
             if hasattr(self, 'logger') and interaction.command:
                  await self.logger.log_command(interaction, interaction.command.name)
 
-        await super().on_interaction(interaction)
+
 
 intents = discord.Intents.default()
 intents.message_content = True  # Enable message content intents
