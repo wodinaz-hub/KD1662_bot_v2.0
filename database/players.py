@@ -43,7 +43,7 @@ def import_kingdom_players(file_path: str, kvk_name: str):
             cursor = conn.cursor()
             cursor.execute("DELETE FROM kingdom_players WHERE kvk_name = ?", (kvk_name,))
             cursor.executemany('''
-                INSERT INTO kingdom_players (player_id, player_name, power, kvk_name)
+                INSERT OR REPLACE INTO kingdom_players (player_id, player_name, power, kvk_name)
                 VALUES (?, ?, ?, ?)
             ''', data_to_insert)
             conn.commit()
