@@ -561,7 +561,10 @@ class Admin(commands.Cog):
             return
         data = []
         for p in all_stats:
-            reqs = db_manager.get_requirements(current_kvk, p['total_power'])
+            # Use initial power from start snapshot for requirement bracket lookup
+            start_snap = db_manager.get_player_start_snapshot(p['player_id'], current_kvk)
+            req_power = start_snap['power'] if start_snap and start_snap.get('power') else p['total_power']
+            reqs = db_manager.get_requirements(current_kvk, req_power)
             rk = reqs['required_kills'] if reqs else 0
             rd = reqs['required_deaths'] if reqs else 0
             tk = (p.get('total_t4_kills',0) or 0) + (p.get('total_t5_kills',0) or 0)

@@ -288,8 +288,10 @@ class Stats(commands.Cog):
             color=discord.Color.green()
         )
         
-        # Get requirements and rank
-        requirements = db_manager.get_requirements(kvk_name, stats['total_power'])
+        # Get requirements and rank (use initial power from start snapshot for bracket lookup)
+        start_snapshot = db_manager.get_player_start_snapshot(player_id, kvk_name)
+        req_power = start_snapshot['power'] if start_snapshot and start_snapshot.get('power') else stats['total_power']
+        requirements = db_manager.get_requirements(kvk_name, req_power)
         rank = db_manager.get_player_rank(player_id, kvk_name)
         
         # Add stats fields using the helper
@@ -456,10 +458,20 @@ class Stats(commands.Cog):
         global_reqs_json = db_manager.get_global_requirements()
         requirements = None
         
+        # Calculate initial power for requirements lookup (use start snapshots)
+        initial_power_total = 0
+        for acc in accounts:
+            snap = db_manager.get_player_start_snapshot(acc['player_id'], kvk_name)
+            if snap and snap.get('power'):
+                initial_power_total += snap['power']
+            else:
+                pid_stats = all_stats.get(acc['player_id'])
+                initial_power_total += (pid_stats.get('total_power', 0) if pid_stats else 0)
+        
         if global_reqs_json:
             try:
                 global_reqs = json.loads(global_reqs_json)
-                power = total_stats['total_power']
+                power = initial_power_total
                 for req in global_reqs:
                     if req['min_power'] <= power <= req['max_power']:
                         requirements = req
@@ -468,7 +480,7 @@ class Stats(commands.Cog):
                 logger.error(f"Error parsing global requirements: {e}")
         
         if not requirements:
-             requirements = db_manager.get_requirements(kvk_name, total_stats['total_power'])
+             requirements = db_manager.get_requirements(kvk_name, initial_power_total)
 
         add_stats_fields(embed, total_stats, requirements, earned_kp_total, power_change_total, rank=None)
         
