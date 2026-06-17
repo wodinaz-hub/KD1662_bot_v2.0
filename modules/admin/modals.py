@@ -50,16 +50,16 @@ class RequirementsModal(discord.ui.Modal, title="Set KvK Requirements"):
                 min_power = 0
                 max_power = 0
                 
-                # Check for "X - Y Power"
-                range_match = re.search(r'(\d+)[Mm]?\s*-\s*(\d+)[Mm]?\s*Power', line, re.IGNORECASE)
+                # Check for "X - Y Power" or just "X - Y"
+                range_match = re.search(r'(\d+)[Mm]?\s*-\s*(\d+)[Mm]?\s*(?:Power)?', line, re.IGNORECASE)
                 if range_match:
                     val1 = int(range_match.group(1)) * 1_000_000
                     val2 = int(range_match.group(2)) * 1_000_000
                     min_power = min(val1, val2)
                     max_power = max(val1, val2)
                 else:
-                    # Check for "X+ Power"
-                    plus_match = re.search(r'(\d+)[Mm]?\+\s*Power', line, re.IGNORECASE)
+                    # Check for "X+ Power" or just "X+"
+                    plus_match = re.search(r'(\d+)[Mm]?\+\s*(?:Power)?', line, re.IGNORECASE)
                     if plus_match:
                         min_power = int(plus_match.group(1)) * 1_000_000
                         max_power = 2_000_000_000 # Arbitrary high cap
@@ -68,8 +68,15 @@ class RequirementsModal(discord.ui.Modal, title="Set KvK Requirements"):
                     continue
 
                 # Extract Goals
-                kills_match = re.search(r'([\d\.,]+[kKmMbB]?)\s*Kills', line, re.IGNORECASE)
-                deads_match = re.search(r'([\d\.,]+[kKmMbB]?)\s*deads', line, re.IGNORECASE)
+                # Support "Kills: X" or "X Kills"
+                kills_match = re.search(r'(?:Kills:?\s*)?([\d\.,]+[kKmMbB]?)\s*Kills', line, re.IGNORECASE)
+                if not kills_match:
+                    kills_match = re.search(r'Kills:?\s*([\d\.,]+[kKmMbB]?)', line, re.IGNORECASE)
+                
+                # Support "Deads: X" or "X deads" or "Deaths: X"
+                deads_match = re.search(r'(?:Dea(?:ds|ths):?\s*)?([\d\.,]+[kKmMbB]?)\s*Dea(?:ds|ths)', line, re.IGNORECASE)
+                if not deads_match:
+                    deads_match = re.search(r'Dea(?:ds|ths):?\s*([\d\.,]+[kKmMbB]?)', line, re.IGNORECASE)
                 
                 req_kp = 0
                 req_deads = 0

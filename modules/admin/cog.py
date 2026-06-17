@@ -620,19 +620,54 @@ class Admin(commands.Cog):
         return [app_commands.Choice(name=s['label'], value=s['value']) for s in seasons if current.lower() in s['label'].lower()][:25]
 
     @commands.command(name="upload_requirements")
-    async def msg_upload_requirements(self, ctx: commands.Context):
+    async def msg_upload_requirements(self, ctx: commands.Context, kvk_name: str = None):
         if not self.is_admin_ctx(ctx):
             await ctx.send("❌ You do not have permissions to use this command.")
             return
-        if not ctx.message.attachments: return
+        if not ctx.message.attachments: 
+            await ctx.send("❌ Please attach an Excel file.")
+            return
         attachment = ctx.message.attachments[0]
-        current_kvk = db_manager.get_current_kvk_name()
+        target_kvk = kvk_name or db_manager.get_current_kvk_name()
+        
+        if not target_kvk or target_kvk == "Not set":
+            await ctx.send("❌ Current KvK is not set and no season name was provided.")
+            return
+
         file_path = f"temp_uploads/{attachment.filename}"
         if not os.path.exists("temp_uploads"): os.makedirs("temp_uploads")
         await attachment.save(file_path)
-        success = db_manager.import_requirements(file_path, current_kvk)
+        success, msg = db_manager.import_requirements(file_path, target_kvk)
         os.remove(file_path)
-        await ctx.send(f"{'✅' if success else '❌'} Requirements upload {'successful' if success else 'failed'}.")
+        await ctx.send(f"{'✅' if success else '❌'} (Season: `{target_kvk}`) {msg}")
+
+    @commands.command(name="sync_requirements")
+    async def msg_sync_requirements(self, ctx: commands.Context, kvk_name: str = None):
+        """Syncs requirements for the active (or specified) season from global templates."""
+        if not self.is_admin_ctx(ctx):
+            await ctx.send("❌ You do not have permissions.")
+            return
+        
+        target_kvk = kvk_name or db_manager.get_current_kvk_name()
+        if not target_kvk or target_kvk == "Not set":
+            await ctx.send("❌ No active KvK season found to sync to.")
+            return
+            
+        await ctx.send(f"⏳ Syncing requirements for **{target_kvk}** from global settings...")
+        
+        from database import admin as admin_db
+        global_reqs = admin_db.get_global_requirements_as_list()
+        if not global_reqs:
+            await ctx.send("⚠️ No global requirements found to sync.")
+            return
+            
+        success = db_manager.save_requirements_batch(target_kvk, global_reqs)
+        if success:
+            await ctx.send(f"✅ Successfully synced {len(global_reqs)} requirement brackets to **{target_kvk}**.")
+            # Update last_updated
+            db_manager.set_last_updated(target_kvk)
+        else:
+            await ctx.send(f"❌ Failed to sync requirements for **{target_kvk}**.")
 
     @commands.command(name="set_global_requirements_file")
     async def msg_set_global_requirements_file(self, ctx: commands.Context):
@@ -651,19 +686,27 @@ class Admin(commands.Cog):
         await ctx.send(f"{'✅' if success else '❌'} {msg}")
 
     @commands.command(name="upload_players")
-    async def msg_upload_players(self, ctx: commands.Context):
+    async def msg_upload_players(self, ctx: commands.Context, kvk_name: str = None):
         if not self.is_admin_ctx(ctx):
             await ctx.send("❌ You do not have permissions to use this command.")
             return
         if not ctx.message.attachments: return
         attachment = ctx.message.attachments[0]
-        current_kvk = db_manager.get_current_kvk_name()
+        target_kvk = kvk_name or db_manager.get_current_kvk_name()
+        
+        if not target_kvk or target_kvk == "Not set":
+            await ctx.send("❌ Current KvK is not set and no season name was provided.")
+            return
+
         file_path = f"temp_uploads/{attachment.filename}"
         if not os.path.exists("temp_uploads"): os.makedirs("temp_uploads")
         await attachment.save(file_path)
-        success, count = db_manager.import_kingdom_players(file_path, current_kvk)
+        success, result = db_manager.import_kingdom_players(file_path, target_kvk)
         os.remove(file_path)
-        await ctx.send(f"{'✅' if success else '❌'} Imported {count} players.")
+        if success:
+            await ctx.send(f"✅ Successfully imported {result} players to **{target_kvk}**.")
+        else:
+            await ctx.send(f"❌ Failed to import players to **{target_kvk}**: {result}")
 
     @commands.command(name="upload_snapshot")
     async def msg_upload_snapshot(self, ctx: commands.Context, period_name: str, snapshot_type: str):
