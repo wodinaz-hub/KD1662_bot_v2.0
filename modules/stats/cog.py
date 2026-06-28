@@ -288,9 +288,13 @@ class Stats(commands.Cog):
             color=discord.Color.green()
         )
         
-        # Get requirements and rank (use initial power from start snapshot for bracket lookup)
-        start_snapshot = db_manager.get_player_start_snapshot(player_id, kvk_name)
-        req_power = start_snapshot['power'] if start_snapshot and start_snapshot.get('power') else stats['total_power']
+        # Get requirements and rank (use initial power from roster for bracket lookup)
+        kp_data = db_manager.get_kingdom_player(player_id, kvk_name)
+        if kp_data and kp_data.get('power'):
+            req_power = kp_data['power']
+        else:
+            start_snapshot = db_manager.get_player_start_snapshot(player_id, kvk_name)
+            req_power = start_snapshot['power'] if start_snapshot and start_snapshot.get('power') else stats['total_power']
         requirements = db_manager.get_requirements(kvk_name, req_power)
         rank = db_manager.get_player_rank(player_id, kvk_name)
         
@@ -461,12 +465,16 @@ class Stats(commands.Cog):
         # Calculate initial power for requirements lookup (use start snapshots)
         initial_power_total = 0
         for acc in accounts:
-            snap = db_manager.get_player_start_snapshot(acc['player_id'], kvk_name)
-            if snap and snap.get('power'):
-                initial_power_total += snap['power']
+            kp_data = db_manager.get_kingdom_player(acc['player_id'], kvk_name)
+            if kp_data and kp_data.get('power'):
+                initial_power_total += kp_data['power']
             else:
-                pid_stats = all_stats.get(acc['player_id'])
-                initial_power_total += (pid_stats.get('total_power', 0) if pid_stats else 0)
+                snap = db_manager.get_player_start_snapshot(acc['player_id'], kvk_name)
+                if snap and snap.get('power'):
+                    initial_power_total += snap['power']
+                else:
+                    pid_stats = all_stats.get(acc['player_id'])
+                    initial_power_total += (pid_stats.get('total_power', 0) if pid_stats else 0)
         
         if global_reqs_json:
             try:

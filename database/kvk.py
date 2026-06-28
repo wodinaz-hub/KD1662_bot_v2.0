@@ -82,8 +82,8 @@ def import_requirements(file_path: str, kvk_name: str):
         col_map = {
             'min_power': ['min power', 'min_power', 'power from'],
             'max_power': ['max power', 'max_power', 'power to'],
-            'required_kills': ['required kills', 'kills', 'kill goal', 'required_kills'],
-            'required_deaths': ['required deaths', 'deaths', 'death goal', 'required_deaths']
+            'required_kills': ['required kills', 'kills', 'kill goal', 'required_kills', 'required_kill'],
+            'required_deaths': ['required deaths', 'deaths', 'death goal', 'required_deaths', 'required_death']
         }
         
         found_cols = {}
