@@ -537,7 +537,7 @@ class CompliancePaginationView(discord.ui.View):
                 return str(num)
             kills_str = f"{fmt(player['kills'])} / {fmt(player['req_kills'])}"
             deaths_str = f"{fmt(player['deaths'])} / {fmt(player['req_deaths'])}"
-            field_name = f"{status_icon} {player['name']} ({fmt(player['power'])})"
+            field_name = f"{status_icon} {player['name']} (Cur: {fmt(player['power'])} | Start: {fmt(player.get('req_power', player['power']))})"
             field_value = f"⚔️ Kills: **{kills_str}**\n💀 Deaths: **{deaths_str}**"
             if not player['compliant']:
                 missing = []
