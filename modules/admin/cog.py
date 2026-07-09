@@ -575,7 +575,7 @@ class Admin(commands.Cog):
             tk = (p.get('total_t4_kills', 0) or 0) + (p.get('total_t5_kills', 0) or 0)
             td = p.get('total_deaths',0) or 0
             compliant = tk >= rk and td >= rd and reqs is not None
-            data.append({'name': p['player_name'], 'power': p['total_power'], 'req_power': req_power, 'kills': tk, 'deaths': td, 'req_kills': rk, 'req_deaths': rd, 'compliant': compliant})
+            data.append({'player_id': p['player_id'], 'name': p['player_name'], 'power': p['total_power'], 'req_power': req_power, 'kills': tk, 'deaths': td, 'req_kills': rk, 'req_deaths': rd, 'compliant': compliant})
         data.sort(key=lambda x: (x['compliant'], -x['power']))
         view = CompliancePaginationView(data, "📋 Compliance Report", current_kvk)
         view.update_buttons()

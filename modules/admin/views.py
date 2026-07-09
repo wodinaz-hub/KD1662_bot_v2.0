@@ -547,7 +547,7 @@ class CompliancePaginationView(discord.ui.View):
             start_p = player.get('req_power', player['power'])
             diff = player['power'] - start_p
             sign = "+" if diff >= 0 else ""
-            field_name = f"{status_icon} {player['name']} (S: {fmt(start_p)} | C: {fmt(player['power'])} | D: {sign}{fmt(diff)})"
+            field_name = f"{status_icon} {player['name']} [`{player['player_id']}`] (S: {fmt(start_p)} | C: {fmt(player['power'])} | D: {sign}{fmt(diff)})"
             
             field_value = f"⚔️ Kills: **{kills_str}**\n💀 Deaths: **{deaths_str}**"
             if not player['compliant']:
