@@ -105,7 +105,7 @@ class MyBot(commands.Bot):
             return
 
         # Get leaderboard for current KvK
-        leaderboard = db_manager.get_leaderboard(current_kvk)
+        leaderboard = db_manager.get_all_kvk_stats(current_kvk)
         if not leaderboard:
             return
 
