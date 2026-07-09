@@ -603,7 +603,14 @@ class Admin(commands.Cog):
         for s in all_stats:
             t4, t5, d = s.get('total_t4_kills',0) or 0, s.get('total_t5_kills',0) or 0, s.get('total_deaths',0) or 0
             dkp = (t4 * t4_w) + (t5 * t5_w) + (d * death_w)
-            player_dkp.append({'player_id': s['player_id'], 'player_name': s['player_name'], 'power': s.get('total_power',0), 't4': t4, 't5': t5, 'deaths': d, 'dkp': dkp})
+            
+            kp_data = db_manager.get_kingdom_player(s['player_id'], target)
+            start_p = kp_data['power'] if kp_data and kp_data.get('power') else None
+            if not start_p:
+                start_snap = db_manager.get_player_start_snapshot(s['player_id'], target)
+                start_p = start_snap['power'] if start_snap and start_snap.get('power') else s.get('total_power',0)
+                
+            player_dkp.append({'player_id': s['player_id'], 'player_name': s['player_name'], 'power': s.get('total_power',0), 'req_power': start_p, 't4': t4, 't5': t5, 'deaths': d, 'dkp': dkp})
         player_dkp.sort(key=lambda x: x['dkp'], reverse=True)
         view = LeaderboardPaginationView(player_dkp, f"🏆 DKP Leaderboard (T4x{t4_w} T5x{t5_w} Dx{death_w})", target)
         await interaction.followup.send(embed=view.create_embed(), view=view, ephemeral=True)

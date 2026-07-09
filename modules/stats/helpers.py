@@ -5,7 +5,7 @@ Contains utility functions for formatting and calculations.
 import discord
 
 
-def add_stats_fields(embed, stats, requirements, earned_kp=None, power_change=None, rank=None):
+def add_stats_fields(embed, stats, requirements, earned_kp=None, power_change=None, rank=None, start_power=None):
     """
     Add statistics fields to Discord embed with 3-column layout.
     
@@ -16,12 +16,19 @@ def add_stats_fields(embed, stats, requirements, earned_kp=None, power_change=No
         earned_kp: Earned kill points (optional)
         power_change: Power change from start (optional)
         rank: Player's DKP rank (optional)
+        start_power: Player's start power (optional)
     """
     # Row 1: Power, Kills (T4+T5), Deaths
-    power_val = f"{stats['total_power']:,}"
-    if power_change is not None:
-        sign = "+" if power_change >= 0 else ""
-        power_val += f"\n({sign}{power_change:,})"
+    if start_power is not None:
+        cur_power = stats['total_power']
+        diff = cur_power - start_power
+        sign = "+" if diff >= 0 else ""
+        power_val = f"Start: **{start_power:,}**\nCur: **{cur_power:,}**\nDiff: `{sign}{diff:,}`"
+    else:
+        power_val = f"{stats['total_power']:,}"
+        if power_change is not None:
+            sign = "+" if power_change >= 0 else ""
+            power_val += f"\n({sign}{power_change:,})"
     embed.add_field(name="💪 Power", value=power_val, inline=True)
 
     t4 = stats.get('total_t4_kills', 0) or 0

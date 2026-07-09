@@ -422,8 +422,14 @@ class LeaderboardPaginationView(discord.ui.View):
             acc_type = self.player_types.get(player['player_id'], 'main')
             type_icon = type_icons.get(acc_type, "👤")
             
+            start_p = player.get('req_power', player.get('power', 0))
+            cur_p = player.get('power', 0)
+            diff = cur_p - start_p
+            sign = "+" if diff >= 0 else ""
+            power_str = f"S:{fmt_short(start_p)}|C:{fmt_short(cur_p)}|D:{sign}{fmt_short(diff)}"
+            
             leaderboard_text += f"{medal} **{player_name}** {type_icon}\n"
-            leaderboard_text += f"   🏆 **{fmt(player['dkp'])} DKP** | ⚡ {fmt_short(player.get('power', 0))}\n"
+            leaderboard_text += f"   🏆 **{fmt(player['dkp'])} DKP** | ⚡ {power_str}\n"
             leaderboard_text += f"   ⚔️ T4: {fmt_short(player['t4'])} | T5: {fmt_short(player['t5'])} | 💀 {fmt_short(player['deaths'])}\n"
             if i < start + len(page_data): leaderboard_text += "\n"
             
@@ -537,7 +543,12 @@ class CompliancePaginationView(discord.ui.View):
                 return str(num)
             kills_str = f"{fmt(player['kills'])} / {fmt(player['req_kills'])}"
             deaths_str = f"{fmt(player['deaths'])} / {fmt(player['req_deaths'])}"
-            field_name = f"{status_icon} {player['name']} (Cur: {fmt(player['power'])} | Start: {fmt(player.get('req_power', player['power']))})"
+            
+            start_p = player.get('req_power', player['power'])
+            diff = player['power'] - start_p
+            sign = "+" if diff >= 0 else ""
+            field_name = f"{status_icon} {player['name']} (S: {fmt(start_p)} | C: {fmt(player['power'])} | D: {sign}{fmt(diff)})"
+            
             field_value = f"⚔️ Kills: **{kills_str}**\n💀 Deaths: **{deaths_str}**"
             if not player['compliant']:
                 missing = []

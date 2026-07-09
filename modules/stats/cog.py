@@ -299,7 +299,7 @@ class Stats(commands.Cog):
         rank = db_manager.get_player_rank(player_id, kvk_name)
         
         # Add stats fields using the helper
-        add_stats_fields(embed, stats, requirements, rank=rank)
+        add_stats_fields(embed, stats, requirements, rank=rank, start_power=req_power)
         
         # Add comparison if current KvK and period is 'all'
         if kvk_name == db_manager.get_current_kvk_name() and period_key == "all":
