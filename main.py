@@ -92,46 +92,10 @@ class MyBot(commands.Bot):
         logger.info(f'{self.user} has connected to Discord!')
         
         # Start background tasks if not already running
-        if not self.weekly_report.is_running():
-            self.weekly_report.start()
         if not self.compliance_check.is_running():
             self.compliance_check.start()
 
-    @tasks.loop(hours=168) # Weekly
-    async def weekly_report(self):
-        """Sends a weekly summary of top performers."""
-        current_kvk = db_manager.get_current_kvk_name()
-        if not current_kvk:
-            return
 
-        # Get leaderboard for current KvK
-        leaderboard = db_manager.get_all_kvk_stats(current_kvk)
-        if not leaderboard:
-            return
-
-        # Sort by KP and Deaths
-        top_kp = sorted(leaderboard, key=lambda x: x['total_kill_points'], reverse=True)[:5]
-        top_deaths = sorted(leaderboard, key=lambda x: x['total_deaths'], reverse=True)[:5]
-
-        kp_text = "\n".join([f"• {p['player_name']}: **{p['total_kill_points']:,}**" for p in top_kp])
-        deaths_text = "\n".join([f"• {p['player_name']}: **{p['total_deaths']:,}**" for p in top_deaths])
-
-        fields = {
-            "⚔️ Top KP": kp_text,
-            "💀 Top Deaths": deaths_text
-        }
-
-        if hasattr(self, 'notifications'):
-            await self.notifications.send_announcement(
-                "📈 Weekly KvK Report",
-                f"Activity summary for season **{current_kvk}** for the past week.",
-                color=discord.Color.gold(),
-                fields=fields
-            )
-
-    @weekly_report.before_loop
-    async def before_weekly_report(self):
-        await self.wait_until_ready()
 
 
     async def on_interaction(self, interaction: discord.Interaction):
