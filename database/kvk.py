@@ -501,7 +501,7 @@ def get_player_stats_by_period(player_id: int, kvk_name: str, period_key: str = 
                 cursor.execute('''
                     SELECT 
                         player_name,
-                        MAX(power) as total_power,
+                        (SELECT power FROM kvk_stats ks2 WHERE ks2.player_id = kvk_stats.player_id AND ks2.kvk_name = kvk_stats.kvk_name ORDER BY rowid DESC LIMIT 1) as total_power,
                         SUM(kill_points) as total_kill_points,
                         SUM(deaths) as total_deaths,
                         SUM(t1_kills) as total_t1_kills,
@@ -552,7 +552,7 @@ def get_kingdom_stats_by_period(kvk_name: str, period_key: str = "all"):
                         SUM(t4_kills) as kingdom_t4_kills,
                         SUM(t5_kills) as kingdom_t5_kills
                     FROM (
-                        SELECT player_id, MAX(power) as power, SUM(kill_points) as kill_points, 
+                        SELECT player_id, (SELECT power FROM kvk_stats ks2 WHERE ks2.player_id = kvk_stats.player_id AND ks2.kvk_name = kvk_stats.kvk_name ORDER BY rowid DESC LIMIT 1) as power, SUM(kill_points) as kill_points, 
                                SUM(deaths) as deaths, SUM(t4_kills) as t4_kills, SUM(t5_kills) as t5_kills
                         FROM kvk_stats WHERE kvk_name = ?
                         GROUP BY player_id
@@ -598,7 +598,7 @@ def get_all_kvk_stats(kvk_name: str):
             cursor.execute('''
                 SELECT 
                     player_id, player_name,
-                    MAX(power) as total_power,
+                    (SELECT power FROM kvk_stats ks2 WHERE ks2.player_id = kvk_stats.player_id AND ks2.kvk_name = kvk_stats.kvk_name ORDER BY rowid DESC LIMIT 1) as total_power,
                     SUM(kill_points) as total_kill_points,
                     SUM(deaths) as total_deaths,
                     SUM(t4_kills) as total_t4_kills,
@@ -642,7 +642,7 @@ def get_total_stats_for_players(player_ids: list, kvk_name: str):
             cursor.execute(f'''
                 SELECT 
                     player_id, player_name,
-                    MAX(power) as total_power,
+                    (SELECT power FROM kvk_stats ks2 WHERE ks2.player_id = kvk_stats.player_id AND ks2.kvk_name = kvk_stats.kvk_name ORDER BY rowid DESC LIMIT 1) as total_power,
                     SUM(kill_points) as total_kill_points,
                     SUM(deaths) as total_deaths,
                     SUM(t1_kills) as total_t1_kills,
@@ -759,7 +759,7 @@ def get_total_player_stats(player_id: int, kvk_name: str):
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT MAX(power) as total_power,
+                SELECT (SELECT power FROM kvk_stats ks2 WHERE ks2.player_id = kvk_stats.player_id AND ks2.kvk_name = kvk_stats.kvk_name ORDER BY rowid DESC LIMIT 1) as total_power,
                        SUM(kill_points) as total_kill_points,
                        SUM(deaths) as total_deaths,
                        SUM(t1_kills) as total_t1_kills,
@@ -797,7 +797,7 @@ def get_kingdom_stats(kvk_name: str):
                     COUNT(*) as player_count
                 FROM (
                     SELECT 
-                        MAX(power) as total_power,
+                        (SELECT power FROM kvk_stats ks2 WHERE ks2.player_id = kvk_stats.player_id AND ks2.kvk_name = kvk_stats.kvk_name ORDER BY rowid DESC LIMIT 1) as total_power,
                         SUM(kill_points) as total_kill_points,
                         SUM(deaths) as total_deaths,
                         SUM(t1_kills) as total_t1_kills,
@@ -837,7 +837,7 @@ def get_player_cross_kvk_stats(player_id: int, kvk_names: list) -> list:
                 SELECT 
                     kvk_name,
                     player_name,
-                    MAX(power) as total_power,
+                    (SELECT power FROM kvk_stats ks2 WHERE ks2.player_id = kvk_stats.player_id AND ks2.kvk_name = kvk_stats.kvk_name ORDER BY rowid DESC LIMIT 1) as total_power,
                     SUM(kill_points) as total_kill_points,
                     SUM(deaths) as total_deaths,
                     SUM(t4_kills) as total_t4_kills,
